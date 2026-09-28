@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import type { ScanInfo } from "@/lib/types";
 import { buttonClass } from "./Button";
+import { ScanStatus } from "./ScanStatus";
 import { cx } from "./cx";
 
 const LINKS = [
@@ -12,11 +14,8 @@ const LINKS = [
   { href: "/how", label: "How it works", match: (p: string) => p.startsWith("/how") },
 ];
 
-const linkClass =
-  "font-mono text-xs font-semibold uppercase tracking-[0.04em] transition-colors duration-150";
-
 /** Sticky glass nav: translucent background, 12px backdrop blur, 1px bottom border. */
-export function Nav() {
+export function Nav({ scan }: { scan: ScanInfo }) {
   const pathname = usePathname();
   // The menu is open for one pathname; navigating closes it without an effect.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -50,7 +49,7 @@ export function Nav() {
           Solari Screener
         </Link>
 
-        <ul className="ml-auto hidden items-center gap-7 md:flex">
+        <ul className="hidden items-center gap-1 md:flex">
           {LINKS.map((l) => {
             const active = l.match(pathname);
             return (
@@ -59,9 +58,8 @@ export function Nav() {
                   href={l.href}
                   aria-current={active ? "page" : undefined}
                   className={cx(
-                    linkClass,
-                    "border-b-2 py-1",
-                    active ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
+                    "rounded-btn px-3 py-1.5 text-sm transition-colors duration-150",
+                    active ? "bg-white/[0.06] text-ink" : "text-ink-muted hover:text-ink",
                   )}
                 >
                   {l.label}
@@ -69,16 +67,18 @@ export function Nav() {
               </li>
             );
           })}
-          <li>
-            <Link
-              href="/optout"
-              aria-current={pathname.startsWith("/optout") ? "page" : undefined}
-              className={buttonClass("ghost", undefined, "sm")}
-            >
-              Opt out
-            </Link>
-          </li>
         </ul>
+
+        <div className="ml-auto hidden items-center gap-5 md:flex">
+          <ScanStatus scan={scan} />
+          <Link
+            href="/optout"
+            aria-current={pathname.startsWith("/optout") ? "page" : undefined}
+            className={buttonClass("ghost", undefined, "sm")}
+          >
+            Opt out
+          </Link>
+        </div>
 
         <button
           ref={toggle}
@@ -110,11 +110,7 @@ export function Nav() {
                     <Link
                       href={l.href}
                       aria-current={active ? "page" : undefined}
-                      className={cx(
-                        linkClass,
-                        "inline-block border-b-2 py-3",
-                        active ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
-                      )}
+                      className={cx("block py-3 text-[15px]", active ? "text-ink" : "text-ink-muted")}
                     >
                       {l.label}
                     </Link>
@@ -122,6 +118,9 @@ export function Nav() {
                 );
               },
             )}
+            <li className="border-t border-line py-3">
+              <ScanStatus scan={scan} />
+            </li>
           </ul>
         </div>
       )}

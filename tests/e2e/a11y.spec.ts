@@ -5,7 +5,7 @@ import { PAGES } from "./pages";
 for (const width of [1440, 390]) {
   test.describe(`axe at ${width}px`, () => {
     test.use({ viewport: { width, height: 900 } });
-    for (const path of [...PAGES, "/?tab=browser", "/s/nobody"]) {
+    for (const path of [...PAGES, "/?product=browser&status=booted", "/s/alice-chen?view=steps", "/s/alice-chen?view=logs", "/s/nobody"]) {
       test(path, async ({ page }) => {
         await page.goto(path);
         await page.waitForTimeout(700); // let the count-up settle

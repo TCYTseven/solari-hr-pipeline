@@ -4,10 +4,9 @@ import { getStats } from "@/lib/data";
 import { formatDuration, formatNumber, formatStage } from "@/lib/format";
 import type { SdkIssue } from "@/lib/types";
 import { Container } from "@/ui/Container";
-import { Divider } from "@/ui/Divider";
-import { Label } from "@/ui/Label";
 import { LiveRefresh } from "@/ui/LiveRefresh";
-import { Metric } from "@/ui/Metric";
+import { PageHeader } from "@/ui/PageHeader";
+import { Panel } from "@/ui/Panel";
 
 export const metadata: Metadata = {
   title: "Stats",
@@ -20,15 +19,12 @@ const ISSUE_STATE: Record<SdkIssue["state"], { label: string; color: string; tex
   closed: { label: "Closed", color: "var(--skip)", text: "var(--text-muted)" },
 };
 
-function Section({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
+function Tile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="flex flex-col">
-      <h2 id={id} className="font-display text-xl font-medium leading-[1.2] tracking-[-0.01em] text-ink md:text-2xl">
-        {title}
-      </h2>
-      <p className="mt-1.5 text-sm text-ink-muted">{sub}</p>
-      <div className="mt-8">{children}</div>
-    </section>
+    <div className="rounded-card border border-line bg-surface px-4 py-3.5">
+      <dt className="text-[13px] text-ink-muted">{label}</dt>
+      <dd className="mt-1 font-mono text-2xl font-medium text-ink tabular-nums">{children}</dd>
+    </div>
   );
 }
 
@@ -52,47 +48,32 @@ export default async function StatsPage() {
     display: formatNumber(u.count),
     detail: `${u.count} submission${u.count === 1 ? "" : "s"}`,
   }));
-  const mostUsed = usageRows.some((r) => r.value > 0)
-    ? usageRows.reduce((a, b) => (a.value >= b.value ? a : b)).key
-    : null;
+  const mostUsed = usageRows.some((r) => r.value > 0) ? usageRows.reduce((a, b) => (a.value >= b.value ? a : b)).key : null;
 
   const totalFailures = stats.failures.reduce((a, f) => a + f.count, 0);
+  const hint = (t: string) => <span className="text-xs text-ink-muted">{t}</span>;
 
   return (
-    <Container className="pb-24 pt-16 md:pt-24">
+    <Container>
       <LiveRefresh minIntervalMs={5000} />
-      <Label className="text-accent">Stats</Label>
-      <h1 className="mt-4 font-display text-[32px] font-medium leading-[1.2] tracking-[-0.03em] text-ink md:text-[44px]">
-        Screening at scale
-      </h1>
-      <p className="mt-3 max-w-[60ch] text-base text-ink-muted">
-        How {formatNumber(stats.screened)} screened submissions booted, which Solari products they reach for, and what
-        broke along the way.
-      </p>
+      <PageHeader
+        title="Stats"
+        description={`${formatNumber(stats.screened)} submissions screened so far: how they booted, which Solari products they use, and what broke.`}
+      />
 
-      <dl className="mt-12 grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-4">
-        <Metric value={formatNumber(stats.vmsLaunched)} label="VMs launched" />
-        <Metric value={formatNumber(stats.vmMinutes)} label="VM-minutes" />
-        <Metric
-          value={
-            <>
-              {formatStage(stats.sandboxCreateP50Ms)}
-              <span className="text-ink-muted"> / </span>
-              {formatStage(stats.sandboxCreateP95Ms)}
-            </>
-          }
-          label="Sandbox create p50 / p95"
-        />
-        <Metric
-          value={stats.failureRate == null ? "-" : `${Math.round(stats.failureRate * 100)}%`}
-          label="Failure rate"
-        />
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Tile label="VMs launched">{formatNumber(stats.vmsLaunched)}</Tile>
+        <Tile label="VM-minutes">{formatNumber(stats.vmMinutes)}</Tile>
+        <Tile label="Sandbox create, p50 / p95">
+          {formatStage(stats.sandboxCreateP50Ms)}
+          <span className="text-ink-muted"> / </span>
+          {formatStage(stats.sandboxCreateP95Ms)}
+        </Tile>
+        <Tile label="Failure rate">{stats.failureRate == null ? "-" : `${Math.round(stats.failureRate * 100)}%`}</Tile>
       </dl>
 
-      <Divider className="my-14 md:my-16" />
-
-      <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-12">
-        <Section id="boot-title" title="Median boot time by project type" sub="Create, clone, install and boot, for runs that booted. Fastest in amber.">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Panel id="boot" title="Median boot time by project type" actions={hint("fastest in amber")}>
           <BarChart
             rows={bootRows}
             highlight={fastest}
@@ -100,8 +81,8 @@ export default async function StatsPage() {
             caption="Median boot time by project type"
             valueHeader="Median boot time"
           />
-        </Section>
-        <Section id="usage-title" title="Which Solari products submissions use" sub="Detected from each project's code. Most common in amber.">
+        </Panel>
+        <Panel id="usage" title="Solari products used" actions={hint("most common in amber")}>
           <BarChart
             rows={usageRows}
             highlight={mostUsed}
@@ -109,49 +90,43 @@ export default async function StatsPage() {
             caption="Solari products used by submissions"
             valueHeader="Submissions"
           />
-        </Section>
-      </div>
+        </Panel>
 
-      <Divider className="my-14 md:my-16" />
-
-      <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-12">
-        <Section id="failures-title" title="Most common build failures" sub="The failure category of each submission that did not boot.">
+        <Panel id="failures" title="Most common build failures" bodyClassName="p-0">
           {stats.failures.length ? (
-            <div className="overflow-x-auto rounded-card border border-line">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">
-                    <th scope="col" className="px-4 py-3 font-semibold">Failure</th>
-                    <th scope="col" className="px-4 py-3 text-right font-semibold">Count</th>
-                    <th scope="col" className="px-4 py-3 text-right font-semibold">Share</th>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-ink-muted">
+                  <th scope="col" className="px-4 py-2.5 font-medium">Failure</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Count</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-medium">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.failures.map((f) => (
+                  <tr key={f.reason} className="border-b border-line last:border-b-0">
+                    <th scope="row" className="px-4 py-3 text-left font-normal text-ink-body">
+                      {f.reason}
+                    </th>
+                    <td className="px-4 py-3 text-right font-mono text-ink tabular-nums">{f.count}</td>
+                    <td className="px-4 py-3 text-right font-mono text-ink-muted tabular-nums">
+                      {Math.round((f.count / totalFailures) * 100)}%
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {stats.failures.map((f) => (
-                    <tr key={f.reason} className="border-b border-line last:border-b-0">
-                      <th scope="row" className="px-4 py-3 text-left font-medium text-ink-body">
-                        {f.reason}
-                      </th>
-                      <td className="px-4 py-3 text-right font-mono text-ink tabular-nums">{f.count}</td>
-                      <td className="px-4 py-3 text-right font-mono text-ink-body tabular-nums">
-                        {Math.round((f.count / totalFailures) * 100)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           ) : (
-            <p className="text-sm text-ink-muted">No failed builds yet.</p>
+            <p className="p-4 text-sm text-ink-muted">No failed builds yet.</p>
           )}
-        </Section>
+        </Panel>
 
-        <Section id="issues-title" title="Issues found in the SDK" sub="Issues and pull requests opened against the Solari SDK while screening.">
+        <Panel id="issues" title="Issues found in the SDK" bodyClassName="p-0">
           {stats.issues.length ? (
-            <ul className="flex flex-col divide-y divide-line rounded-card border border-line">
+            <ul className="flex flex-col divide-y divide-line">
               {stats.issues.map((i) => (
-                <li key={i.id} className="flex items-start gap-3 px-4 py-3.5">
-                  <span className="mt-0.5 shrink-0 rounded-badge border border-line px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase leading-4 tracking-[0.04em] text-ink-muted">
+                <li key={i.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="mt-0.5 shrink-0 rounded-badge border border-line px-1.5 py-0.5 font-mono text-[11px] leading-4 text-ink-muted">
                     {i.kind === "pr" ? "PR" : "Issue"}
                   </span>
                   <a href={i.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 text-sm text-ink-body hover:text-ink hover:underline">
@@ -168,9 +143,11 @@ export default async function StatsPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-ink-muted">None opened yet.</p>
+            <p className="p-4 text-sm text-ink-muted">
+              None recorded yet. Add one with <code className="font-mono text-xs">npm run sdk-issue</code>.
+            </p>
           )}
-        </Section>
+        </Panel>
       </div>
     </Container>
   );

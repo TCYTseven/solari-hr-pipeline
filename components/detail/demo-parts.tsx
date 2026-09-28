@@ -1,19 +1,18 @@
 "use client";
 
+// Pieces of the demo viewer: the live frame, the step timeline under the video.
+
 import { useEffect, useRef, useState } from "react";
-import type { DemoStep, Run, Submission } from "@/lib/types";
-import { Label } from "@/ui/Label";
-import { LogBlock } from "@/ui/LogBlock";
-import { VideoFrame, type VideoFrameHandle } from "@/ui/VideoFrame";
+import type { DemoStep } from "@/lib/types";
 import { cx } from "@/ui/cx";
 
-function clock(t: number): string {
+export function clock(t: number): string {
   const s = Math.max(0, Math.round(t));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 /** Latest frame of an active run, refreshed every second. */
-function LiveView({ src, title }: { src: string; title: string }) {
+export function LiveView({ src, title }: { src: string; title: string }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -50,7 +49,7 @@ function layoutDots(times: number[], duration: number, width: number): number[] 
   return x.map((v) => (v / width) * 100);
 }
 
-function Timeline({
+export function Timeline({
   steps,
   duration,
   current,
@@ -72,25 +71,34 @@ function Timeline({
     return () => ro.disconnect();
   }, []);
   const lefts = layoutDots(steps.map((s) => s.t), duration, width);
+  const dense = width > 0 && steps.length * DOT > width;
   const activeIdx = steps.reduce((acc, s, i) => (s.t <= current + 0.25 ? i : acc), -1);
   const shown = open ?? null;
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between">
-        <Label className="text-ink-muted">Agent steps</Label>
-        <span className="font-mono text-xs text-ink-muted tabular-nums">
-          {steps.length} actions · {clock(duration)}
-        </span>
-      </div>
-      <div ref={track} className="relative mt-3 h-8" onMouseLeave={() => setOpen(null)}>
+    <div className="mt-2">
+      <div ref={track} className="relative h-8" onMouseLeave={() => setOpen(null)}>
         <div aria-hidden className="absolute inset-x-0 top-1/2 h-px bg-line-strong" />
         <div
           aria-hidden
           className="absolute left-0 top-1/2 h-px bg-accent"
           style={{ width: `${Math.min(100, (current / duration) * 100)}%` }}
         />
-        <ol className="contents">
+        {dense && (
+          <div aria-hidden>
+            {steps.map((s, i) => (
+              <span
+                key={i}
+                className={cx(
+                  "absolute top-1/2 h-2.5 w-px -translate-y-1/2",
+                  i <= activeIdx ? "bg-accent" : "bg-ink-muted",
+                )}
+                style={{ left: `${lefts[i]}%` }}
+              />
+            ))}
+          </div>
+        )}
+        <ol className={dense ? "hidden" : "contents"}>
           {steps.map((s, i) => {
             const left = lefts[i];
             const isActive = i === activeIdx;
@@ -148,97 +156,20 @@ function Timeline({
           </div>
         )}
       </div>
-      <p className="mt-2 min-h-5 font-mono text-xs text-ink-muted">
-        {activeIdx >= 0 ? (
-          <>
-            <span className="text-ink-body">{clock(steps[activeIdx].t)}</span> {steps[activeIdx].label}
-          </>
-        ) : (
-          "Click a step to jump to it."
-        )}
-      </p>
-    </div>
-  );
-}
-
-export function DemoPlayer({
-  submission,
-  run,
-  startLive,
-}: {
-  submission: Submission;
-  run: Run | null;
-  startLive: boolean;
-}) {
-  const video = useRef<VideoFrameHandle>(null);
-  const [current, setCurrent] = useState(0);
-  const live = run?.status === "running" && run.streamUrl ? run.streamUrl : null;
-  const [showLive, setShowLive] = useState(startLive && !!live);
-  const steps = run?.steps ?? [];
-  const duration = Math.max(1, ...steps.map((s) => s.t + 3));
-  const title = `${submission.owner} / ${submission.title}`;
-
-  const failed = submission.status === "build_failed" || submission.status === "timeout" || submission.status === "needs_secrets";
-  // For failures, show the tail of the log that failed rather than only the card's four lines.
-  const failLog = (submission.status === "build_failed" ? run?.logs.install : run?.logs.run) ?? "";
-  const failLines = failLog.split("\n").filter((l) => l.trim()).slice(-18);
-  const tail = failLines.length > (submission.errorTail?.length ?? 0) ? failLines : (submission.errorTail ?? []);
-
-  return (
-    <div id="demo" className="min-w-0 scroll-mt-20">
-      {live && (
-        <div className="mb-3 flex gap-5">
-          {[
-            { v: true, l: "Live" },
-            { v: false, l: "Last recording" },
-          ].map((o) => (
-            <button
-              key={o.l}
-              type="button"
-              aria-pressed={showLive === o.v}
-              onClick={() => setShowLive(o.v)}
-              className={cx(
-                "border-b-2 pb-1 text-[13px]",
-                showLive === o.v ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
-              )}
-            >
-              {o.l}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {showLive && live ? (
-        <LiveView src={live} title={title} />
-      ) : !submission.videoUrl && failed && tail.length ? (
-        <LogBlock
-          lines={tail}
-          tone={submission.status === "build_failed" ? "fail" : "default"}
-          className="aspect-video"
-          label="Last lines of the log"
-        />
-      ) : (
-        <VideoFrame
-          ref={video}
-          src={submission.videoUrl}
-          poster={submission.thumbnailUrl}
-          captionsSrc={submission.captionsUrl}
-          title={`Demo of ${title}`}
-          onTimeUpdate={setCurrent}
-        />
-      )}
-
-      {steps.length > 0 && !showLive && (
-        <Timeline
-          steps={steps}
-          duration={duration}
-          current={current}
-          onSeek={(i) => {
-            setCurrent(steps[i].t);
-            video.current?.seek(steps[i].t);
-          }}
-        />
-      )}
+      <div className="mt-1 flex min-h-5 items-center justify-between gap-4 font-mono text-xs text-ink-muted">
+        <p className="truncate">
+          {activeIdx >= 0 ? (
+            <>
+              <span className="text-ink-body">{clock(steps[activeIdx].t)}</span> {steps[activeIdx].label}
+            </>
+          ) : (
+            dense ? "Every agent action is listed under Agent steps." : "Each dot is one agent action. Click to jump to it."
+          )}
+        </p>
+        <span className="shrink-0 tabular-nums">
+          {steps.length} actions · {clock(duration)}
+        </span>
+      </div>
     </div>
   );
 }

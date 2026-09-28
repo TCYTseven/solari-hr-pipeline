@@ -32,7 +32,7 @@ for (const width of WIDTHS) {
     test("detail page: score panel beside the video only at >=1200px", async ({ page }) => {
       await page.goto("/s/alice-chen");
       const video = await page.locator("#demo").boundingBox();
-      const score = await page.getByText("Score", { exact: true }).locator("xpath=ancestor::section[1]").boundingBox();
+      const score = await page.locator("#score").boundingBox();
       expect(video && score).toBeTruthy();
       if (width >= 1200) expect(score!.x).toBeGreaterThan(video!.x + video!.width - 1);
       else expect(score!.y).toBeGreaterThan(video!.y + video!.height - 1);
@@ -61,10 +61,10 @@ for (const width of WIDTHS) {
 test.describe("mobile type", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("hero H1 drops to 36px and the run table scrolls inside its frame", async ({ page }) => {
+  test("page title is 28px and the run table scrolls inside its frame", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("h1")).toHaveCSS("font-size", "36px");
-    await page.goto("/s/alice-chen");
+    await expect(page.locator("h1")).toHaveCSS("font-size", "28px");
+    await page.goto("/s/alice-chen?view=timing");
     const region = page.getByRole("region", { name: "Run breakdown table" });
     const { scroll, client } = await region.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth }));
     expect(scroll).toBeGreaterThan(client);

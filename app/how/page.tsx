@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { CodeTabs, type CodeSample } from "@/components/how/CodeTabs";
 import { Container } from "@/ui/Container";
-import { Divider } from "@/ui/Divider";
-import { Label } from "@/ui/Label";
+import { PageHeader } from "@/ui/PageHeader";
+import { Panel } from "@/ui/Panel";
 
 export const metadata: Metadata = {
   title: "How it works",
@@ -131,28 +131,21 @@ try {
 
 export default function HowPage() {
   return (
-    <Container className="pb-24 pt-16 md:pt-24">
-      <Label className="text-accent">How it works</Label>
-      <h1 className="mt-4 max-w-[20ch] font-display text-[32px] font-medium leading-[1.2] tracking-[-0.03em] text-ink md:text-[44px]">
-        From fork to scored demo in five steps
-      </h1>
-      <p className="mt-4 max-w-[60ch] text-base text-ink-muted">
-        One Solari key covers the sandbox that builds each project and the browser or desktop that demos it. Claude
-        Sonnet does the reading, the clicking and the judging.
-      </p>
+    <Container>
+      <PageHeader
+        title="How it works"
+        description="One Solari key covers the sandbox that builds each project and the browser or desktop that demos it. Claude Sonnet does the reading, the clicking and the judging."
+      />
 
-      {/* Diagram */}
-      <figure className="mt-14" aria-label="Pipeline diagram">
+      <figure aria-label="Pipeline diagram">
         <ol className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-0">
           {STEPS.map((s, i) => (
-            <li key={s.n} className="relative flex lg:pr-6">
-              <div className="flex w-full flex-col justify-between gap-6 rounded-card border border-line bg-surface p-4">
-                <p className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
-                  Step {s.n}
-                </p>
+            <li key={s.n} className="relative flex lg:pr-6 lg:last:pr-0">
+              <div className="flex w-full items-start gap-3 rounded-card border border-line bg-surface p-4 lg:flex-col lg:gap-5">
+                <span className="font-mono text-xs text-ink-muted tabular-nums">{s.n}</span>
                 <div>
-                  <p className="font-display text-lg font-medium leading-[1.2] tracking-[-0.01em] text-ink">{s.title}</p>
-                  <p className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-accent">{s.tag}</p>
+                  <p className="text-[15px] font-medium leading-snug text-ink">{s.title}</p>
+                  <p className="mt-1 text-xs text-accent">{s.tag}</p>
                 </div>
               </div>
               {i < STEPS.length - 1 && (
@@ -165,27 +158,26 @@ export default function HowPage() {
             </li>
           ))}
         </ol>
-        <figcaption className="mt-4 font-mono text-xs text-ink-muted">
+        <figcaption className="mt-3 text-[13px] text-ink-muted">
           Runs every 30 minutes. Each stage writes to Postgres as it finishes, so the dashboard updates live.
         </figcaption>
       </figure>
 
-      <Divider className="my-14 md:my-16" />
-
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <ol className="flex flex-col gap-8">
-          {STEPS.map((s) => (
-            <li key={s.n} className="grid grid-cols-[40px_1fr] gap-3">
-              <span className="font-mono text-sm text-accent tabular-nums">{s.n}</span>
-              <div>
-                <h2 className="font-display text-xl font-medium leading-[1.2] tracking-[-0.01em] text-ink">{s.title}</h2>
-                <p className="mt-2 max-w-[65ch] text-sm leading-normal text-ink-muted">{s.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <Panel title="The five steps">
+          <ol className="flex flex-col gap-5">
+            {STEPS.map((s) => (
+              <li key={s.n} className="grid grid-cols-[28px_1fr] gap-2">
+                <span className="pt-0.5 font-mono text-xs text-accent tabular-nums">{s.n}</span>
+                <div>
+                  <h3 className="text-[15px] font-medium text-ink">{s.title}</h3>
+                  <p className="mt-1 max-w-[65ch] text-sm leading-normal text-ink-muted">{s.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Panel>
         <div className="min-w-0">
-          <Label className="mb-4 text-ink-muted">One client per product</Label>
           <CodeTabs samples={SAMPLES} />
         </div>
       </div>

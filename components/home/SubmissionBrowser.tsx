@@ -1,154 +1,191 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import {
+  DEFAULT_BROWSE,
+  PRODUCT_FILTERS,
+  SORTS,
+  STATUS_FILTERS,
+  applyBrowse,
+  browseQuery,
+  productCounts,
+  statusCounts,
+  type BrowseState,
+  type Sort,
+} from "@/lib/browse";
 import { topScoreThreshold } from "@/lib/metrics";
 import type { Submission } from "@/lib/types";
-import { Container } from "@/ui/Container";
-import { Tabs } from "@/ui/Tabs";
 import { cx } from "@/ui/cx";
 import { SubmissionCard } from "./SubmissionCard";
-import { DEFAULT_STATE, SORTS, TABS, type BrowserState, type Sort } from "./state";
 
-function toQuery(s: BrowserState): string {
-  const p = new URLSearchParams();
-  if (s.tab !== "all") p.set("tab", s.tab);
-  if (s.q) p.set("q", s.q);
-  if (s.sort !== "newest") p.set("sort", s.sort);
-  if (s.booted) p.set("booted", "1");
-  const q = p.toString();
-  return q ? `?${q}` : window.location.pathname;
-}
-
-function applyFilters(subs: Submission[], s: BrowserState): Submission[] {
-  const q = s.q.trim().toLowerCase();
-  const out = subs.filter((x) => {
-    if (s.tab !== "all" && !x.productsUsed.includes(s.tab)) return false;
-    if (s.booted && x.status !== "booted") return false;
-    if (!q) return true;
-    return [x.owner, x.title, x.description, ...x.stack.map((t) => t.name)].some((f) => f.toLowerCase().includes(q));
-  });
-  const byNewest = (a: Submission, b: Submission) => b.discoveredAt.localeCompare(a.discoveredAt);
-  switch (s.sort) {
-    case "score":
-      return out.sort((a, b) => (b.score?.total ?? -1) - (a.score?.total ?? -1) || byNewest(a, b));
-    case "boot":
-      return out.sort((a, b) => (a.bootMs ?? Infinity) - (b.bootMs ?? Infinity) || byNewest(a, b));
-    case "fork":
-      return out.sort((a, b) => a.forkNumber - b.forkNumber);
-    default:
-      return out.sort(byNewest);
-  }
-}
-
-export function SubmissionBrowser({
-  submissions,
-  initial,
+function FilterGroup<T extends string>({
+  label,
+  options,
+  value,
+  counts,
+  onChange,
 }: {
-  submissions: Submission[];
-  initial: BrowserState;
+  label: string;
+  options: { value: T; label: string }[];
+  value: T;
+  counts: Record<T, number>;
+  onChange: (v: T) => void;
 }) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-xs font-medium text-ink-muted">{label}</legend>
+      <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <li key={o.value} className="shrink-0">
+              <button
+                type="button"
+                aria-pressed={active}
+                onClick={() => onChange(o.value)}
+                className={cx(
+                  "flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-btn border px-2.5 py-1.5 text-left text-[13px] transition-colors duration-150 lg:border-transparent",
+                  active
+                    ? "border-line-strong bg-white/[0.07] text-ink"
+                    : "border-line text-ink-muted hover:bg-white/[0.04] hover:text-ink",
+                )}
+              >
+                {o.label}
+                <span className="font-mono text-[11px] tabular-nums text-ink-muted">{counts[o.value]}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
+  );
+}
+
+export function SubmissionBrowser({ submissions, initial }: { submissions: Submission[]; initial: BrowseState }) {
   const [state, setState] = useState(initial);
   const search = useRef<HTMLInputElement>(null);
-  const visible = useMemo(() => applyFilters(submissions, state), [submissions, state]);
+  const visible = useMemo(() => applyBrowse(submissions, state), [submissions, state]);
+  const sCounts = useMemo(() => statusCounts(submissions, state), [submissions, state]);
+  const pCounts = useMemo(() => productCounts(submissions, state), [submissions, state]);
   const threshold = useMemo(() => topScoreThreshold(submissions), [submissions]);
+  const query = browseQuery(state);
 
   // Owners present on first paint. Anything that arrives later (live scan) fades in.
   const [initialOwners] = useState(() => new Set(submissions.map((s) => s.owner)));
 
-  function update(patch: Partial<BrowserState>) {
+  function update(patch: Partial<BrowseState>) {
     const next = { ...state, ...patch };
     setState(next);
-    window.history.replaceState(null, "", toQuery(next));
+    window.history.replaceState(null, "", browseQuery(next) || window.location.pathname);
   }
 
+  const filtered = state.status !== "all" || state.product !== "all" || state.q !== "";
+
   return (
-    <Container className="pb-16 pt-10 md:pb-24">
-      <h2 className="sr-only">Submissions</h2>
-      <div className="flex flex-col gap-5 border-b border-line lg:flex-row lg:items-end lg:justify-between">
-        <Tabs
-          label="Filter by Solari product"
-          items={TABS}
-          value={state.tab}
-          onChange={(tab) => update({ tab })}
-          idPrefix="filter"
-          panelId="submission-results"
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
+      <aside aria-label="Filters" className="flex flex-col gap-4 lg:sticky lg:top-[72px] lg:gap-6 lg:self-start">
+        <FilterGroup
+          label="Status"
+          options={STATUS_FILTERS}
+          value={state.status}
+          counts={sCounts}
+          onChange={(status) => update({ status })}
         />
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pb-3">
-          <label className="relative block w-full sm:w-64">
+        <FilterGroup
+          label="Solari product"
+          options={PRODUCT_FILTERS}
+          value={state.product}
+          counts={pCounts}
+          onChange={(product) => update({ product })}
+        />
+      </aside>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative min-w-0 flex-1 basis-56">
             <span className="sr-only">Search submissions</span>
+            <svg
+              aria-hidden
+              viewBox="0 0 16 16"
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-ink-muted"
+            >
+              <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
             <input
               ref={search}
               type="search"
               value={state.q}
               onChange={(e) => update({ q: e.target.value })}
-              placeholder="Search..."
-              className="h-9 w-full rounded-btn border border-line bg-surface px-3 text-sm text-ink placeholder:font-mono placeholder:text-[13px] placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              placeholder="Search by name, project or stack"
+              className="h-9 w-full rounded-btn border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
           </label>
-          <label className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
-            Sort:
-            <span className="relative">
-              <select
-                value={state.sort}
-                onChange={(e) => update({ sort: e.target.value as Sort })}
-                className="h-9 cursor-pointer appearance-none rounded-btn border border-transparent bg-transparent pl-1 pr-6 font-sans text-sm normal-case tracking-normal text-ink hover:border-line"
-              >
-                {SORTS.map((s) => (
-                  <option key={s.value} value={s.value} className="bg-surface">
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <span aria-hidden className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-muted">
-                ▾
-              </span>
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-body">
-            <input
-              type="checkbox"
-              checked={state.booted}
-              onChange={(e) => update({ booted: e.target.checked })}
-              className="size-4 cursor-pointer rounded-badge accent-[#F5B301]"
-            />
-            Only booted
+          <label className="flex items-center gap-2 text-[13px] text-ink-muted">
+            Sort
+            <select
+              value={state.sort}
+              onChange={(e) => update({ sort: e.target.value as Sort })}
+              className="h-9 cursor-pointer rounded-btn border border-line bg-surface px-2.5 text-sm text-ink focus:border-line-strong"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
-      </div>
 
-      <p className="sr-only" aria-live="polite">
-        {visible.length} submission{visible.length === 1 ? "" : "s"} shown
-      </p>
-
-      <div id="submission-results" role="tabpanel" aria-labelledby={`filter-tab-${state.tab}`}>
-      {visible.length > 0 ? (
-        <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {visible.map((s) => (
-            <li
-              key={s.owner}
-              className={cx("flex [&>article]:w-full", !initialOwners.has(s.owner) && "fade-in")}
-            >
-              <SubmissionCard s={s} top={threshold != null && s.score != null && s.score.total >= threshold} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-16 text-center text-ink-muted">
-          No submissions match these filters.{" "}
-          <button
-            type="button"
-            onClick={() => {
-              update(DEFAULT_STATE);
-              // The button unmounts with the empty state; keep focus somewhere useful.
-              requestAnimationFrame(() => search.current?.focus());
-            }}
-            className="text-blue hover:underline"
-          >
-            Clear filters
-          </button>
+        <p className="mt-3 text-[13px] text-ink-muted" aria-live="polite">
+          {visible.length} of {submissions.length} submission{submissions.length === 1 ? "" : "s"}
+          {filtered && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={() => {
+                  update(DEFAULT_BROWSE);
+                  search.current?.focus();
+                }}
+                className="text-blue hover:underline"
+              >
+                Clear filters
+              </button>
+            </>
+          )}
         </p>
-      )}
+
+        <div id="submission-results">
+          {visible.length > 0 ? (
+            <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {visible.map((s) => (
+                <li key={s.owner} className={cx("flex [&>article]:w-full", !initialOwners.has(s.owner) && "fade-in")}>
+                  <SubmissionCard
+                    s={s}
+                    href={`/s/${encodeURIComponent(s.owner)}${query}`}
+                    top={threshold != null && s.score != null && s.score.total >= threshold}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="mt-4 rounded-card border border-dashed border-line-strong px-6 py-16 text-center">
+              <p className="text-ink">No submissions match these filters.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  update(DEFAULT_BROWSE);
+                  search.current?.focus();
+                }}
+                className="mt-2 text-sm text-blue hover:underline"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </Container>
+    </div>
   );
 }

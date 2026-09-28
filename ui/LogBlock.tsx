@@ -114,7 +114,7 @@ export function LogBlock({
   /** "code" skips the log heuristics (error/warning lines) and only highlights syntax. */
   mode?: "log" | "code";
   /**
-   * block: standalone panel. card: compact and wrapped, for a card thumbnail.
+   * block: standalone panel. card: compact, wrapped and frameless, filling a card's thumbnail slot.
    * bare: no frame, when a parent already draws one.
    */
   variant?: "block" | "card" | "bare";
@@ -130,7 +130,7 @@ export function LogBlock({
         "bg-teal-900 font-mono font-normal leading-[1.6] tracking-normal [font-variant-ligatures:none]",
         variant === "block" && "overflow-auto rounded-card border border-teal-700 p-4 text-[13px]",
         variant === "bare" && "overflow-auto p-4 text-[13px]",
-        variant === "card" && "overflow-hidden rounded-btn border border-teal-700 p-3 text-[11.5px]",
+        variant === "card" && "overflow-hidden p-3 text-[11.5px]",
         className,
       )}
       style={{ color: tone === "fail" ? "var(--fail)" : "var(--syn-plain)", maxHeight }}

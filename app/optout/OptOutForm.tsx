@@ -14,7 +14,7 @@ export function OptOutForm() {
 
   if (state.status === "done") {
     return (
-      <p ref={done} tabIndex={-1} role="status" className="mt-10 flex items-center gap-2 text-base text-ink">
+      <p ref={done} tabIndex={-1} role="status" className="flex items-center gap-2 text-base text-ink">
         <span aria-hidden className="size-1.5 rounded-full bg-ok" />
         Removed. Your submission is hidden from the dashboard.
       </p>
@@ -31,9 +31,9 @@ export function OptOutForm() {
         const data = new FormData(e.currentTarget);
         startTransition(() => action(data));
       }}
-      className="mt-10 flex max-w-lg flex-col gap-3"
+      className="flex max-w-lg flex-col gap-3"
     >
-      <label htmlFor="username" className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
+      <label htmlFor="username" className="text-[13px] text-ink-muted">
         GitHub username
       </label>
       <div className="flex flex-col gap-3 sm:flex-row">

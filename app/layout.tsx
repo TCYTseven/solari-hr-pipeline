@@ -25,11 +25,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
       </head>
       <body className="flex min-h-dvh flex-col">
-        <Nav />
+        <Nav scan={scan} />
         <main id="main" className="flex-1">
           {children}
         </main>
-        <Footer lastScanAt={scan.lastScanAt} />
+        <Footer />
       </body>
     </html>
   );

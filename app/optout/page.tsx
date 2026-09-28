@@ -1,21 +1,27 @@
 import type { Metadata } from "next";
 import { Container } from "@/ui/Container";
-import { Label } from "@/ui/Label";
+import { PageHeader } from "@/ui/PageHeader";
+import { Panel } from "@/ui/Panel";
 import { OptOutForm } from "./OptOutForm";
 
 export const metadata: Metadata = { title: "Opt out", description: "Remove your submission from Solari Screener." };
 
 export default function OptOutPage() {
   return (
-    <Container className="pb-24 pt-16 md:pt-24">
-      <Label className="text-accent">Opt out</Label>
-      <h1 className="mt-4 font-display text-[32px] font-medium leading-[1.2] tracking-[-0.03em] text-ink md:text-[44px]">
-        Remove a submission
-      </h1>
-      <p className="mt-4 max-w-[60ch] text-base text-ink-muted">
-        Want your submission removed? Enter your GitHub username. It will be hidden within 24 hours.
-      </p>
-      <OptOutForm />
+    <Container>
+      <PageHeader title="Opt out" description="Want your submission removed? Enter your GitHub username. It will be hidden within 24 hours." />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Panel title="Remove my submission">
+          <OptOutForm />
+        </Panel>
+        <Panel title="What happens" as="aside">
+          <ul className="flex list-disc flex-col gap-2 pl-4 text-sm leading-normal text-ink-muted">
+            <li>Your fork disappears from the dashboard, including its demo and score.</li>
+            <li>The screener never clones or runs it again.</li>
+            <li>Nothing about your repository changes on GitHub.</li>
+          </ul>
+        </Panel>
+      </div>
     </Container>
   );
 }
