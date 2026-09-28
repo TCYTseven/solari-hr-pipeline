@@ -30,7 +30,6 @@ next-env.d.ts
 .DS_Store
 *.pem
 npm-debug.log*
-__pycache__/
 
 # agent worktrees
 /.claude/

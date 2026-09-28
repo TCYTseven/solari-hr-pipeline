@@ -12,9 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Cookbook boilerplate, removed at the end of the build.
-    "examples/**",
-    "applications/**",
     ".claude/**",
     // Clones and recordings written by the pipeline (untrusted submission code).
     ".screener/**",

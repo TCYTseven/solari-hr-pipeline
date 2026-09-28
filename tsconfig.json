@@ -38,8 +38,6 @@
   ],
   "exclude": [
     "node_modules",
-    "examples",
-    "applications",
     ".claude",
     ".screener"
   ]

@@ -1,2 +1,0 @@
-# These exact bytes are hashed in live/run.json; disable checkout line conversion.
-live/*.csv -text
