@@ -73,7 +73,7 @@ Leave `SOLARI_API_KEY` empty and the pipeline builds each fork in a throwaway Do
 | `npm run dev` / `build` / `start` | The dashboard |
 | `npm run scan` | Screen forks once. Flags: `--owner <login>` rescreen one fork, `--forks a/b,c/d` screen a given list, `--limit N`, `--concurrency N` (default 2), `--executor auto\|solari\|docker`, `--no-demo`, `--force`, `--verbose` |
 | `npm run scan:watch` | Scan every `SCREENER_INTERVAL_MIN` minutes (default 30) |
-| `npm run solari:check` | Smoke test for your Solari key: a sandbox, a browser session and a desktop, with timings |
+| `npm run solari:check` | Tests your Solari key on the exact paths the pipeline uses (sandbox commands, preview URLs, browser recording, desktop display and recording) and ends with a pass / warn / fail summary |
 | `npm run db:migrate` | Apply `db/schema.sql` (safe to rerun) |
 | `npm run db:seed` / `db:reset -- --yes` | Load or wipe sample data |
 | `npm run db:restore -- <login>` | Undo an opt-out and queue that fork again |
@@ -110,10 +110,11 @@ Every setting is listed with its default in [`.env.example`](.env.example).
 
 Submissions are untrusted code, so:
 
-- **Keys.** The screener's own keys never reach a submission. Only variables named `SUBMISSION_<NAME>` are passed in (as `<NAME>`).
-- **Prompt injection.** Repository content and web pages are treated as data in every Claude prompt, never as instructions, and secrets are redacted from logs and captions.
-- **Docker fallback.** Each run gets its own throwaway container, and Postgres listens on localhost only with a random password. A Solari Sandbox is still the stronger boundary, so prefer a Solari key when screening strangers' code.
-- **Opt-outs.** Anyone can opt any username out. If someone misuses the form, `npm run db:restore -- <login>` undoes it.
+- **Keys.** The screener's own keys never reach a submission. Only variables named `SUBMISSION_<NAME>` are passed in (as `<NAME>`), and a scan refuses to start if one of them equals the screener's own Solari, Anthropic or GitHub key. Every value written to the database is redacted for those secrets first.
+- **Reading the repo.** Triage only reads files inside the fork's checkout. Symlinks and `package.json` paths that point elsewhere (say, at this repo's `.env`) are ignored.
+- **Prompt injection.** Repository content and web pages go to Claude inside tagged blocks marked as untrusted data, never as instructions.
+- **Docker fallback.** Each run gets its own container and network, all Linux capabilities dropped except the five installs need, no-new-privileges and a process limit. The demo browser can't reach localhost or private addresses other than the app itself. Postgres listens on localhost only, with a random password. Containers still have outbound internet (installs need it) and can reach host services that listen on every interface, so a Solari Sandbox is the stronger boundary: prefer a Solari key when screening strangers' code.
+- **Opt-outs.** Checked before and during every run. Anyone can opt any username out; if someone misuses the form, `npm run db:restore -- <login>` undoes it.
 - **Review page.** The review key lives in the URL. Share that link only with reviewers; the page sends no referrer and is kept out of search engines.
 
 ## Deploying
