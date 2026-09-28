@@ -1,4 +1,5 @@
-// Database tasks: `npm run db:migrate`, `npm run db:seed`, `npm run db:reset -- --yes`.
+// Database tasks: `npm run db:migrate`, `npm run db:seed`, `npm run db:reset -- --yes`,
+// `npm run db:restore -- <github-login>` (undo an opt-out; the fork is screened again).
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { MOCK_ISSUES, MOCK_SUBMISSIONS, mockRunFor } from "../lib/mock";
@@ -72,13 +73,27 @@ async function reset() {
   console.log("database reset");
 }
 
+async function restore(owner: string | undefined) {
+  if (!owner) {
+    console.error("usage: npm run db:restore -- <github-login>");
+    process.exit(1);
+  }
+  await pool.query("delete from optouts where lower(owner) = lower($1)", [owner]);
+  const res = await pool.query(
+    "update submissions set hidden = false, status = 'queued', commit_sha = null, updated_at = now() where lower(owner) = lower($1)",
+    [owner],
+  );
+  console.log(res.rowCount ? `restored ${owner}; it will be screened on the next scan` : `removed the opt-out for ${owner}`);
+}
+
 const cmd = process.argv[2];
 try {
   if (cmd === "migrate") await migrate();
   else if (cmd === "seed") await seed();
   else if (cmd === "reset") await reset();
+  else if (cmd === "restore") await restore(process.argv[3]);
   else {
-    console.error("usage: db.mts migrate | seed | reset --yes");
+    console.error("usage: db.mts migrate | seed | reset --yes | restore <login>");
     process.exitCode = 1;
   }
 } finally {

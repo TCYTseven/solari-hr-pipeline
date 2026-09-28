@@ -12,7 +12,8 @@
     "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/db.mts migrate",
     "db:seed": "node --env-file-if-exists=.env --import tsx scripts/db.mts seed",
     "db:reset": "node --env-file-if-exists=.env --import tsx scripts/db.mts reset",
-    "sdk-issue": "node --env-file-if-exists=.env --import tsx scripts/sdk-issue.mts"
+    "sdk-issue": "node --env-file-if-exists=.env --import tsx scripts/sdk-issue.mts",
+    "db:restore": "node --env-file-if-exists=.env --import tsx scripts/db.mts restore"
   },
   "dependencies": {
     "next": "16.3.6",

@@ -10,6 +10,8 @@ import { LiveRefresh } from "@/ui/LiveRefresh";
 export const metadata: Metadata = {
   title: "Review",
   robots: { index: false, follow: false, nocache: true },
+  // The key is in the URL; don't hand it to other sites in the Referer header.
+  referrer: "no-referrer",
 };
 
 function keyMatches(given: string | undefined): boolean {
