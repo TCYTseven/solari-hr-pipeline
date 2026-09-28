@@ -53,19 +53,22 @@ const solari = new SolariClient({ apiKey: process.env.SOLARI_API_KEY! })
 
 // python3 + node + git, booted from a snapshot
 const sandbox = await solari.sandboxes.create({
-  template: "base", cpu: 2, memMb: 4096,
+  template: "base", cpu: 2, memMb: 4096, diskGb: 10,
+  envs: submissionEnv,                  // only SUBMISSION_* secrets
   idleTimeoutMs: 15 * 60_000,
+  lifecycle: { onTimeout: "kill" },
 })
 try {
-  // No shell: argv goes in args, and in-guest timeout bounds each stage
-  await sandbox.commands.run("sh", { args: ["-c", \`timeout 600 git clone --depth 50 \${repoUrl} /work/repo\`] })
-  const install = await sandbox.commands.run("sh", {
-    args: ["-c", "cd /work/repo/app && timeout 900 npm ci"],
+  await sandbox.connect()
+  // No shell: argv goes in args. timeoutMs is ignored on this channel,
+  // so every stage runs under an in-guest timeout.
+  const install = await sandbox.commands.start("sh", {
+    args: ["-c", "cd /tmp/screener/repo/app && exec timeout 600 sh -c 'npm ci'"],
   })
-  await sandbox.commands.run("sh", {
-    args: ["-c", "cd /work/repo/app && nohup npm start > /tmp/run.log 2>&1 &"],
-  })
-  const { url } = await sandbox.previewUrl(3000)   // public preview URL
+  install.onData((chunk) => log.install(chunk.data))
+  const exitCode = await install.wait()
+
+  const { url } = await sandbox.previewUrl(port)   // public preview URL
 } finally {
   await sandbox.kill()   // kill() ends the VM; close() would leave it running
 }`,
@@ -75,9 +78,12 @@ try {
     label: "Browser",
     file: "pipeline/demo/surfaces.ts",
     code: `import { Solari } from "@solarisdk/browser"
+import { chromium } from "playwright"
 
 const solari = new Solari({ apiKey: process.env.SOLARI_API_KEY! })
-const browser = await solari.launch({ recording: true })
+const session = await solari.sessions.create({})
+// CDP has no client-version gate, so plain Playwright can attach
+const browser = await chromium.connectOverCDP(session.cdpEndpoint)
 try {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
@@ -86,12 +92,13 @@ try {
   const page = await context.newPage()
   await page.goto(previewUrl)
 
-  // Claude drives: screenshot in, action out, until it calls finish_demo
+  // Claude drives: screenshot in, actions out, until it calls finish_demo
   const shot = await page.screenshot({ type: "png" })
   await page.mouse.click(x, y)
   await page.keyboard.type(text)
+  await context.close()          // flushes demo.webm
 } finally {
-  await browser.close()   // also releases the session
+  await solari.sessions.releaseAndWait(session.id)
 }`,
   },
   {
@@ -101,9 +108,9 @@ try {
     code: `import { SolariClient } from "@solarisdk/sdk"
 
 const solari = new SolariClient({ apiKey: process.env.SOLARI_API_KEY! })
-const desktop = await solari.desktops.create({
-  template: "default", resolution: "1280x800",
-  record: true, lifecycle: { onTimeout: "kill" },
+const desktop = await solari.sandboxes.createDesktop({
+  template: "default", resolution: "1280x800", record: true,
+  envs: submissionEnv, lifecycle: { onTimeout: "kill" },
 })
 try {
   await desktop.connect()

@@ -72,7 +72,7 @@ export function BarChart({
                   ) : (
                     <div
                       className="group absolute inset-y-0 left-0 flex items-center"
-                      style={{ width: `${Math.max(pct, 0.6)}%` }}
+                      style={{ width: `${r.value > 0 ? Math.max(pct, 0.6) : 0}%` }}
                     >
                       <span
                         className={cx(
