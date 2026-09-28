@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Solari Screener architecture</title>
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      main {
+        position: relative;
+        height: 100%;
+        padding: 0 72px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      h1 {
+        margin-top: 14px;
+        font-size: 44px;
+        font-weight: 500;
+        letter-spacing: -0.035em;
+        color: var(--text);
+      }
+      .sub {
+        margin-top: 10px;
+        font-size: 18px;
+        color: var(--text-muted);
+      }
+      .card {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 18px 18px 20px;
+      }
+      .n {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .title {
+        margin-top: 14px;
+        font-size: 19px;
+        color: var(--text);
+      }
+      .tag {
+        margin-top: 4px;
+        font-size: 13px;
+        color: var(--accent);
+      }
+      .detail {
+        margin-top: 12px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--text-body);
+      }
+      .stages {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 28px;
+      }
+      .stages .card {
+        height: 246px;
+      }
+      .stages .card:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        right: -28px;
+        top: 50px;
+        width: 28px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(245, 179, 1, 0.25), rgba(245, 179, 1, 0.95));
+      }
+      .stages .card::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -30px;
+        width: 1px;
+        height: 30px;
+        background: var(--line-teal);
+      }
+      .bus {
+        position: relative;
+        /* From the centre of the first stage card to the centre of the last:
+           (1356px content - 4 x 28px gaps) / 5 cards / 2 = 124.4px. */
+        margin: 29px 124.4px 0;
+        height: 1px;
+        background: var(--line-teal);
+      }
+      .bus::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1px;
+        height: 30px;
+        background: var(--line-teal);
+      }
+      .bus span {
+        position: absolute;
+        left: 50%;
+        top: 10px;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-muted);
+        background: var(--bg);
+        padding: 0 10px;
+      }
+      .sink {
+        margin-top: 30px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.35fr 1fr;
+        gap: 28px;
+        align-items: stretch;
+      }
+      .sink .card {
+        padding: 16px 18px 18px;
+      }
+      .sink .card .title {
+        margin-top: 0;
+      }
+      .sink .card:nth-child(1)::after,
+      .sink .card:nth-child(2)::after {
+        content: "";
+        position: absolute;
+        right: -28px;
+        top: 50%;
+        width: 28px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(0, 153, 255, 0.25), rgba(0, 153, 255, 0.95));
+      }
+      .sink .live .tag {
+        color: var(--blue);
+      }
+      .pages {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .pages span {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: 4px;
+        padding: 3px 7px;
+        color: var(--text-body);
+      }
+      .safety {
+        margin-top: 34px;
+        border: 1px solid var(--line-teal);
+        border-radius: 10px;
+        background: var(--surface-teal);
+        padding: 18px 20px 20px;
+      }
+      .safety ul {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px 28px;
+        list-style: none;
+      }
+      .safety li {
+        font-size: 14px;
+        color: var(--text-body);
+        padding-left: 18px;
+        position: relative;
+      }
+      .safety li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 7px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <main>
+      <p class="eyebrow">Architecture</p>
+      <h1>One scan, five stages, streamed live</h1>
+      <p class="sub">A Node pipeline screens each fork. A Next.js dashboard shows every stage the moment it lands in Postgres.</p>
+
+      <section class="stages">
+        <div class="card">
+          <p class="n">01</p>
+          <p class="title">Discover</p>
+          <p class="tag">GitHub API</p>
+          <p class="detail">Lists every fork of the cookbook. Skips forks whose commit hasn't changed and anyone who opted out.</p>
+        </div>
+        <div class="card">
+          <p class="n">02</p>
+          <p class="title">Triage</p>
+          <p class="tag">Claude Sonnet</p>
+          <p class="detail">Diffs the fork against upstream to find the candidate's project, then returns type, stack, Solari products, install and run commands, and a demo goal.</p>
+        </div>
+        <div class="card">
+          <p class="n">03</p>
+          <p class="title">Build</p>
+          <p class="tag">Solari Sandbox</p>
+          <p class="detail">Installs and boots in a fresh microVM (a desktop VM for GUI apps) with in-guest timeouts, then exposes the port on a preview URL. Docker fallback without a key.</p>
+        </div>
+        <div class="card">
+          <p class="n">04</p>
+          <p class="title">Demo</p>
+          <p class="tag">Solari Browser · Desktop</p>
+          <p class="detail">A Claude computer-use agent explores the app while the session records. Every action becomes a captioned timeline step with Claude's reasoning.</p>
+        </div>
+        <div class="card">
+          <p class="n">05</p>
+          <p class="title">Score</p>
+          <p class="tag">Claude Sonnet</p>
+          <p class="detail">Grades boots, works, uses Solari, use case and polish from 1 to 5 using the code, the logs and the demo, and writes a two-paragraph summary.</p>
+        </div>
+      </section>
+
+      <div class="bus"><span>each stage writes as it finishes</span></div>
+
+      <section class="sink">
+        <div class="card">
+          <p class="title">Postgres</p>
+          <p class="tag">runs · submissions</p>
+          <p class="detail">A trigger fires <span class="mono">NOTIFY</span> on every change.</p>
+        </div>
+        <div class="card live">
+          <p class="title">/api/live</p>
+          <p class="tag">server-sent events</p>
+          <p class="detail">One listener fans changes out to every open browser.</p>
+        </div>
+        <div class="card live">
+          <p class="title">Dashboard</p>
+          <p class="tag">Next.js · React</p>
+          <div class="pages"><span>/</span><span>/s/[owner]</span><span>/review</span><span>/stats</span><span>/how</span><span>/optout</span></div>
+        </div>
+        <div class="card">
+          <p class="title">Media</p>
+          <p class="tag">recordings · captions · thumbnails</p>
+          <p class="detail">Served at <span class="mono">/media</span>, or from S3 / R2 in production.</p>
+        </div>
+      </section>
+
+      <section class="safety">
+        <p class="eyebrow" style="color: var(--ok)">Submissions are untrusted code</p>
+        <ul>
+          <li>Only SUBMISSION_* secrets reach a submission</li>
+          <li>Screener keys redacted before anything is stored</li>
+          <li>Triage reads stay inside the checkout, no symlink escapes</li>
+          <li>Repo text goes to Claude tagged as untrusted data</li>
+          <li>Demo browser can't reach private or loopback hosts</li>
+          <li>Opt-outs checked before and during every run</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

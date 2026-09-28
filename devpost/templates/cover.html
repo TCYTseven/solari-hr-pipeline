@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Solari Screener cover</title>
+    <link rel="stylesheet" href="base.css" />
+    <style>
+      .copy {
+        position: absolute;
+        left: 88px;
+        top: 96px;
+        width: 560px;
+        z-index: 2;
+      }
+      h1 {
+        margin-top: 22px;
+        font-size: 88px;
+        font-weight: 500;
+        line-height: 1;
+        letter-spacing: -0.045em;
+        color: var(--text);
+      }
+      .tagline {
+        margin-top: 26px;
+        max-width: 500px;
+        font-size: 24px;
+        line-height: 1.4;
+        color: var(--text-body);
+      }
+      .copy .amber-line {
+        margin-top: 40px;
+        width: 420px;
+        background: linear-gradient(90deg, rgba(245, 179, 1, 0.96), rgba(245, 179, 1, 0));
+      }
+      .steps {
+        margin-top: 34px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        list-style: none;
+      }
+      .steps li {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        align-items: baseline;
+        font-size: 20px;
+        color: var(--text);
+      }
+      .steps .n {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--accent);
+      }
+      .steps .tag {
+        margin-left: 10px;
+        font-size: 15px;
+        color: var(--text-muted);
+      }
+      .back {
+        position: absolute;
+        left: 700px;
+        top: 70px;
+        width: 1000px;
+        opacity: 0.55;
+      }
+      .front {
+        position: absolute;
+        left: 610px;
+        top: 360px;
+        width: 960px;
+      }
+      .fade {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, var(--bg) 0%, var(--bg) 38%, rgba(8, 10, 14, 0) 52%);
+        z-index: 1;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="window back"><img src="../screenshots/01-submissions.png" alt="" /></div>
+    <div class="window front"><img src="../screenshots/02-submission-demo.png" alt="" /></div>
+    <div class="fade"></div>
+
+    <div class="copy">
+      <p class="eyebrow">Built on Solari · Claude</p>
+      <h1>Solari Screener</h1>
+      <p class="tagline">Every hiring-challenge submission, booted in a sandbox, demoed on camera by an AI agent and scored before anyone opens the repo.</p>
+      <div class="amber-line"></div>
+      <ol class="steps">
+        <li><span class="n">01</span><span>Discover<span class="tag">GitHub forks</span></span></li>
+        <li><span class="n">02</span><span>Triage<span class="tag">Claude Sonnet</span></span></li>
+        <li><span class="n">03</span><span>Build<span class="tag">Solari Sandbox</span></span></li>
+        <li><span class="n">04</span><span>Demo<span class="tag">Solari Browser · Desktop</span></span></li>
+        <li><span class="n">05</span><span>Score<span class="tag">Claude Sonnet</span></span></li>
+      </ol>
+    </div>
+  </body>
+</html>
