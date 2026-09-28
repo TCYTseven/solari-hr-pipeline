@@ -132,3 +132,26 @@ export async function getStats(): Promise<Stats> {
     issues: issues.rows.map(toIssue),
   });
 }
+
+// Opt-outs made while running on mock data only live for the life of the process.
+const mockOptOuts = new Set<string>();
+
+/** Hide a submission and stop screening it. Returns whether a matching fork existed. */
+export async function optOut(owner: string): Promise<{ found: boolean }> {
+  if (!hasDatabase()) {
+    mockOptOuts.add(owner.toLowerCase());
+    const s = MOCK_SUBMISSIONS.find((x) => x.owner.toLowerCase() === owner.toLowerCase());
+    if (s) {
+      s.hidden = true;
+      s.status = "opted_out";
+    }
+    return { found: !!s };
+  }
+  const pool = db();
+  await pool.query("insert into optouts (owner) values (lower($1)) on conflict (owner) do nothing", [owner]);
+  const res = await pool.query(
+    "update submissions set hidden = true, status = 'opted_out', updated_at = now() where lower(owner) = lower($1)",
+    [owner],
+  );
+  return { found: (res.rowCount ?? 0) > 0 };
+}
