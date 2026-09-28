@@ -14,15 +14,24 @@
     "db:reset": "node --env-file-if-exists=.env --import tsx scripts/db.mts reset",
     "sdk-issue": "node --env-file-if-exists=.env --import tsx scripts/sdk-issue.mts",
     "db:restore": "node --env-file-if-exists=.env --import tsx scripts/db.mts restore",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "scan": "tsx --env-file-if-exists=.env pipeline/cli.ts scan",
+    "scan:watch": "tsx --env-file-if-exists=.env pipeline/cli.ts watch",
+    "solari:check": "tsx --env-file-if-exists=.env pipeline/solari-check.ts",
+    "test:pipeline": "tsx --test \"pipeline/**/*.test.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@solarisdk/browser": "^0.1.5",
+    "@solarisdk/sdk": "^0.1.4",
     "next": "16.3.6",
     "pg": "^8.23.0",
+    "playwright": "^1.63.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "simple-icons": "^16.33.0"
+    "simple-icons": "^16.33.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
