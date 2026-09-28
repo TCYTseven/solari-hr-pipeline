@@ -5,7 +5,7 @@ import { cx } from "./cx";
 // getsolari.com's code sample (keywords purple, identifiers blue, strings
 // green, numbers and warnings amber, comments muted).
 const TOKEN =
-  /("[^"]*"|'[^']*'|`[^`]*`)|(\b(?:import|export|const|let|await|async|function|return|new|def|class|raise|throw|lambda|yield)\b)|(\b\d+(?:\.\d+)?(?:ms|s|m|kB|MB|GB|%)?\b)|([A-Za-z_$][\w$]*(?=\())/g;
+  /("[^"]*"|'[^']*'|`[^`]*`)|(\b(?:import|export|const|let|await|async|function|return|new|def|class|raise|throw|lambda|yield|try|catch|finally)\b)|(\b\d+(?:\.\d+)?(?:ms|s|m|kB|MB|GB|%)?\b)|([A-Za-z_$][\w$]*(?=\())/g;
 
 function highlight(text: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -35,7 +35,23 @@ function highlight(text: string): ReactNode[] {
   return out;
 }
 
-function Line({ line }: { line: string }) {
+/** Index of a trailing `//` comment that isn't inside a string or a URL, or -1. */
+function commentStart(line: string): number {
+  let quote: string | null = null;
+  for (let i = 0; i < line.length - 1; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === quote && line[i - 1] !== "\\") quote = null;
+    } else if (c === '"' || c === "'" || c === "`") {
+      quote = c;
+    } else if (c === "/" && line[i + 1] === "/" && line[i - 1] !== ":") {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function Line({ line, code }: { line: string; code: boolean }) {
   const trimmed = line.trimStart();
   if (trimmed.startsWith("$ ")) {
     const [cmd, ...rest] = trimmed.slice(2).split(" ");
@@ -48,10 +64,29 @@ function Line({ line }: { line: string }) {
     );
   }
   if (/^(#|\/\/|>)/.test(trimmed)) return <span style={{ color: "var(--syn-comment)" }}>{line}</span>;
+  if (code) {
+    const cut = commentStart(line);
+    return cut >= 0 ? (
+      <>
+        {highlight(line.slice(0, cut))}
+        <span style={{ color: "var(--syn-comment)" }}>{line.slice(cut)}</span>
+      </>
+    ) : (
+      <>{highlight(line)}</>
+    );
+  }
   if (/\b(error|ERR!|failed|fatal|exception|traceback|cannot find|not found|ENOENT|exit code [1-9])/i.test(line))
     return <span style={{ color: "var(--fail)" }}>{line}</span>;
   if (/\b(warn(ing)?|deprecated|timeout|timed out|missing)\b/i.test(line))
     return <span style={{ color: "var(--syn-number)" }}>{line}</span>;
+  const cut = commentStart(line);
+  if (cut > 0)
+    return (
+      <>
+        {highlight(line.slice(0, cut))}
+        <span style={{ color: "var(--syn-comment)" }}>{line.slice(cut)}</span>
+      </>
+    );
   return <>{highlight(line)}</>;
 }
 
@@ -66,6 +101,7 @@ export function LogBlock({
   tone = "default",
   label,
   maxHeight,
+  mode = "log",
 }: {
   text?: string;
   lines?: string[];
@@ -74,6 +110,8 @@ export function LogBlock({
   tone?: "default" | "fail";
   label?: string;
   maxHeight?: number;
+  /** "code" skips the log heuristics (error/warning lines) and only highlights syntax. */
+  mode?: "log" | "code";
 }) {
   const all = lines ?? (text ?? "").replace(/\n$/, "").split("\n");
   return (
@@ -89,7 +127,7 @@ export function LogBlock({
       <code>
         {all.map((line, i) => (
           <span key={i} className="block min-h-[1.6em] whitespace-pre">
-            {tone === "fail" ? line : <Line line={line} />}
+            {tone === "fail" ? line : <Line line={line} code={mode === "code"} />}
           </span>
         ))}
       </code>
