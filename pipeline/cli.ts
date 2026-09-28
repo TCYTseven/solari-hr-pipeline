@@ -1,14 +1,14 @@
 // Entry point: `npm run scan -- [flags]` and `npm run scan:watch`.
 import { pathToFileURL } from "node:url";
-import { config, submissionEnv } from "./config";
+import { config, sharedSecretConflicts, submissionEnv } from "./config";
 import { type ForkRef, type RemoteHeads, discoverForks, lsRemote, parseForkSpec, upstreamRef } from "./discover";
 import { DockerExecutor } from "./executors/docker";
 import { SolariExecutor } from "./executors/solari";
 import type { Executor } from "./executors/types";
-import { activeRuns, screenFork, shouldSkip } from "./screen";
+import { MAX_SCREENER_ERRORS, activeRuns, screenFork, shouldSkip } from "./screen";
 import { Store } from "./store";
 import { InterruptedError, errMessage, isStopping, pool, requestStop, runCleanups, sleep } from "./util";
-import { ensureUpstreamMirror } from "./workspace";
+import { ensureUpstreamMirror, resetUpstreamMirror } from "./workspace";
 
 export interface ScanFlags {
   command: "scan" | "watch";
@@ -98,14 +98,45 @@ export function pickExecutor(kind: ScanFlags["executor"]): Executor {
 const say = (msg: string) => console.log(`${new Date().toISOString().slice(11, 19)} ${msg}`);
 
 async function resolveForks(flags: ScanFlags, store: Store): Promise<ForkRef[]> {
-  const forks = await discoverForks(flags.forks);
+  const discovered = await discoverForks(flags.forks);
+  // GitHub logins are case-insensitive but the owner key is not: reuse the stored spelling.
+  const forks: ForkRef[] = [];
+  for (const f of discovered) forks.push({ ...f, owner: (await store.canonicalOwner(f.owner)) ?? f.owner });
   if (!flags.owner) return forks;
-  const want = flags.owner.toLowerCase();
-  const hit = forks.filter((f) => f.owner.toLowerCase() === want);
-  if (hit.length) return hit;
-  const known = await store.getSubmissionRepo(flags.owner);
-  if (known) return [{ ...parseForkSpec(known.repoUrl), owner: flags.owner, repo: known.repo }];
-  return [parseForkSpec(`${flags.owner}/${upstreamRef().repo}`)];
+  const owner = (await store.canonicalOwner(flags.owner)) ?? flags.owner;
+  const hit = forks.filter((f) => f.owner.toLowerCase() === owner.toLowerCase());
+  if (hit.length) return hit.map((f) => ({ ...f, owner }));
+  const known = await store.getSubmissionRepo(owner);
+  if (known) return [{ ...parseForkSpec(known.repoUrl), owner, repo: known.repo }];
+  return [{ ...parseForkSpec(`${owner}/${upstreamRef().repo}`), owner }];
+}
+
+/** Refuse to run when a submission would get one of the screener's own keys. */
+export function assertNoSharedSecrets(env: Record<string, string | undefined> = process.env): void {
+  const shared = sharedSecretConflicts(env);
+  if (shared.length === 0) return;
+  throw new Error(
+    `Refusing to scan: ${shared.map((k) => `SUBMISSION_${k}`).join(", ")} ${shared.length === 1 ? "is" : "are"} the same as the screener's own ` +
+      `${shared.join(", ")}. Submissions are untrusted code and would get your key: with a shared Solari key a candidate ` +
+      "can list and kill the screener's VMs and other candidates' (they are all tagged screener=1), and spend on your account. " +
+      "Create a separate key (a separate Solari org or project) for SUBMISSION_* and try again.",
+  );
+}
+
+/**
+ * Crash recovery at scan start: close runs and scans left `running` for hours, and,
+ * when no other scan is live, remove leftover containers and VMs from a crashed run.
+ */
+async function recover(store: Store, executor: Executor): Promise<void> {
+  const stale = await store.recoverStale();
+  if (stale.scans || stale.owners.length) {
+    say(`recovered from an earlier crash: closed ${stale.scans} scan(s), requeued ${stale.owners.length} submission(s)`);
+  }
+  if ((await store.freshRunningScans()) > 0) {
+    say("another scan is running: leaving its containers and VMs alone");
+    return;
+  }
+  await executor.cleanupOrphans(say);
 }
 
 export async function scan(flags: ScanFlags): Promise<void> {
@@ -116,7 +147,11 @@ export async function scan(flags: ScanFlags): Promise<void> {
   let found = 0;
   try {
     await store.ping();
+    assertNoSharedSecrets();
     const executor = pickExecutor(flags.executor);
+    await recover(store, executor);
+    // Watch mode runs many scans in one process: fetch the upstream again each time.
+    resetUpstreamMirror();
     scanId = await store.startScan();
     say(`scan ${scanId.slice(0, 8)} started (executor ${executor.kind}, model ${config.model}, upstream ${config.upstream})`);
 
@@ -146,9 +181,10 @@ export async function scan(flags: ScanFlags): Promise<void> {
     await pool(eligible, 6, async (fork) => {
       try {
         const heads = await lsRemote(fork.cloneUrl);
-        const last = await store.lastFinishedRun(fork.owner);
-        if (!flags.force && shouldSkip(last, heads, new Set(Object.keys(submissionEnv())))) {
-          say(`[${fork.owner}] unchanged since last run (${heads.headSha?.slice(0, 7)}): skipped`);
+        const history = await store.recentFinishedRuns(fork.owner, MAX_SCREENER_ERRORS);
+        const skip = flags.force ? null : shouldSkip(history, heads, new Set(Object.keys(submissionEnv())));
+        if (skip) {
+          say(`[${fork.owner}] ${skip}: skipped`);
           return;
         }
         todo.push({ fork, heads });

@@ -10,7 +10,7 @@ import { parseListeningPorts, pickAppPort, portsInLog } from "./executors/types"
 import { escapeHtml, terminalHtml, terminalLines } from "./media";
 import { applyStatusCaps, computeScore } from "./score";
 import { fingerprint, missingSecretsTail, shouldSkip } from "./screen";
-import { buildUpdate, patchColumns } from "./store";
+import { type LastRun, buildUpdate, patchColumns } from "./store";
 import { type Triage, heuristicTriage, normalizeTriage } from "./triage";
 
 test("computeScore clamps to 1-5 and averages to one decimal", () => {
@@ -57,21 +57,35 @@ const heads = (headSha: string, ...others: string[]) => ({
   heads: [{ name: "main", sha: headSha }, ...others.map((s, i) => ({ name: `b${i}`, sha: s }))],
 });
 
-test("shouldSkip compares the fork fingerprint with the last completed run", () => {
-  assert.equal(shouldSkip(null, heads("a")), false);
-  const last = { id: "r", commitSha: "x", status: "booted" as const, failureReason: null, triage: { _source: fingerprint(heads("a", "b")) } };
-  assert.equal(shouldSkip(last, heads("a", "b")), true);
-  assert.equal(shouldSkip(last, heads("a", "c")), false, "a feature branch moved");
-  assert.equal(shouldSkip(last, heads("z", "b")), false, "default branch moved");
-  // A screener error is always retried.
-  assert.equal(shouldSkip({ ...last, status: "skipped", failureReason: "Screener error" }, heads("a", "b")), false);
+test("shouldSkip compares the fork fingerprint with the last finished run", () => {
+  const skip = (history: LastRun[], h: ReturnType<typeof heads>, env?: Set<string>) => shouldSkip(history, h, env) != null;
+  assert.equal(skip([], heads("a")), false);
+  const last: LastRun = { id: "r", commitSha: "x", status: "booted", failureReason: null, triage: { _source: fingerprint(heads("a", "b")) } };
+  assert.equal(skip([last], heads("a", "b")), true);
+  assert.match(shouldSkip([last], heads("a", "b"))!, /unchanged/);
+  assert.equal(skip([last], heads("a", "c")), false, "a feature branch moved");
+  assert.equal(skip([last], heads("z", "b")), false, "default branch moved");
   // needs_secrets is retried once the missing variables are provided.
-  const ns = { ...last, status: "needs_secrets" as const, triage: { requiredEnv: ["SOLARI_API_KEY"], _source: fingerprint(heads("a", "b")) } };
-  assert.equal(shouldSkip(ns, heads("a", "b"), new Set()), true);
-  assert.equal(shouldSkip(ns, heads("a", "b"), new Set(["SOLARI_API_KEY"])), false);
+  const ns: LastRun = { ...last, status: "needs_secrets", triage: { requiredEnv: ["SOLARI_API_KEY"], _source: fingerprint(heads("a", "b")) } };
+  assert.equal(skip([ns], heads("a", "b"), new Set()), true);
+  assert.equal(skip([ns], heads("a", "b"), new Set(["SOLARI_API_KEY"])), false);
   // Runs without a fingerprint fall back to the commit sha.
-  assert.equal(shouldSkip({ ...last, triage: null, commitSha: "a" }, heads("a")), true);
-  assert.equal(shouldSkip({ ...last, triage: null, commitSha: "a" }, heads("b")), false);
+  assert.equal(skip([{ ...last, triage: null, commitSha: "a" }], heads("a")), true);
+  assert.equal(skip([{ ...last, triage: null, commitSha: "a" }], heads("b")), false);
+});
+
+test("shouldSkip retries screener errors, but not a 4th time on the same state", () => {
+  const err = (kind: string, head = "a"): LastRun => ({
+    id: kind, commitSha: head, status: "skipped", failureReason: "Screener error",
+    triage: { _source: fingerprint(heads(head)), _screener: { error: kind } },
+  });
+  assert.equal(shouldSkip([err("error")], heads("a")), null);
+  assert.equal(shouldSkip([err("error"), err("error")], heads("a")), null);
+  assert.match(shouldSkip([err("error"), err("error"), err("error")], heads("a"))!, /3 screener errors/);
+  // A new commit resets the count; interruptions (Ctrl-C) and crashes do not count.
+  assert.equal(shouldSkip([err("error"), err("error"), err("error")], heads("b")), null);
+  assert.equal(shouldSkip([err("error"), err("interrupted"), err("error")], heads("a")), null);
+  assert.equal(shouldSkip([err("stale"), err("error"), err("error")], heads("a")), null);
 });
 
 test("missingSecretsTail names the missing variables", () => {

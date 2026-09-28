@@ -8,9 +8,11 @@ import type { Desktop } from "@solarisdk/sdk";
 import { type Browser, type BrowserContext, type Page, chromium } from "playwright";
 import type { Product, StageTiming } from "../../lib/types";
 import { config } from "../config";
+import { DISPLAY_DETECT, applySolariWsMode, withConcurrencyRetry } from "../executors/solari";
 import { launchLocalChromium } from "../media";
-import { sleep } from "../util";
+import { onCleanup, shellQuoteArg, sleep } from "../util";
 import { toPlaywrightKey } from "./captions";
+import { shouldBlockRequest, withPreviewToken } from "./netguard";
 
 export type ActionInput = Record<string, unknown>;
 
@@ -86,6 +88,7 @@ abstract class PlaywrightSurface implements Surface {
       // Some CDP endpoints refuse new contexts: fall back to the default one, no video.
       this.context = this.browser.contexts()[0] ?? (await this.browser.newContext({ viewport }));
     }
+    await this.guardNetwork(url);
     this.page = this.context.pages()[0] ?? (await this.context.newPage());
     if (!this.recording) await this.page.setViewportSize(viewport);
     this.videoStartedAt = Date.now();
@@ -102,10 +105,34 @@ abstract class PlaywrightSurface implements Surface {
     }
   }
 
+  /**
+   * The page is untrusted: block requests to loopback, private and link-local
+   * hosts (the screener's machine, the Docker host, the LAN, cloud metadata)
+   * except the app's own origin; and add the preview `pt_token` to same-origin
+   * requests that lost it.
+   */
+  private async guardNetwork(appUrl: string | null): Promise<void> {
+    const ctx = this.context!;
+    const origin = appUrl ? new URL(appUrl).origin : null;
+    await ctx.route("**/*", async (route) => {
+      const url = route.request().url();
+      if (shouldBlockRequest(url, origin)) return route.abort("blockedbyclient");
+      const withToken = withPreviewToken(url, appUrl);
+      return withToken ? route.continue({ url: withToken }) : route.continue();
+    });
+    await ctx.routeWebSocket(
+      (u) => shouldBlockRequest(u.href, origin),
+      (ws) => ws.close(),
+    );
+  }
+
   private p(): Page {
     if (!this.page) throw new Error("browser not open");
     return this.page;
   }
+
+  /** Map ctrl+a/c/v/x/z/y to Cmd on a local macOS browser. */
+  protected macShortcuts = false;
 
   async screenshot(): Promise<Buffer> {
     return this.p().screenshot({ type: "png", timeout: 15_000 });
@@ -169,7 +196,8 @@ abstract class PlaywrightSurface implements Surface {
         break;
       case "key": {
         const times = Math.min(Math.max(Number(input.repeat ?? 1) || 1, 1), 50);
-        for (let i = 0; i < times; i++) await page.keyboard.press(toPlaywrightKey(String(input.text ?? "")));
+        const key = toPlaywrightKey(String(input.text ?? ""), { macShortcuts: this.macShortcuts });
+        for (let i = 0; i < times; i++) await page.keyboard.press(key);
         break;
       }
       case "hold_key": {
@@ -266,6 +294,7 @@ abstract class PlaywrightSurface implements Surface {
 /** Local Chromium via Playwright (Docker executor). */
 export class LocalBrowserSurface extends PlaywrightSurface {
   readonly label = "Local browser" as const;
+  protected macShortcuts = process.platform === "darwin";
   protected connect(): Promise<Browser> {
     return launchLocalChromium();
   }
@@ -278,14 +307,19 @@ export class SolariBrowserSurface extends PlaywrightSurface {
   private sessionId: string | null = null;
   private startedAt = 0;
   private endedAt = 0;
+  private unregister: (() => void) | null = null;
 
   protected async connect(): Promise<Browser> {
     if (!config.solariApiKey) throw new Error("SOLARI_API_KEY is not set");
-    this.solari = new Solari({ apiKey: config.solariApiKey, ...(config.solariBaseUrl ? { baseUrl: config.solariBaseUrl } : {}) });
-    const session = await this.solari.sessions.create({});
+    applySolariWsMode();
+    const solari = new Solari({ apiKey: config.solariApiKey, ...(config.solariBaseUrl ? { baseUrl: config.solariBaseUrl } : {}) });
+    this.solari = solari;
+    const session = await withConcurrencyRetry(() => solari.sessions.create({}));
     this.sessionId = session.id;
     this.startedAt = Date.now();
     this.vmCount = 1;
+    // Ctrl-C releases the session too.
+    this.unregister = onCleanup(() => this.close());
     // CDP has no client-version gate, so the regular playwright package can attach.
     return chromium.connectOverCDP(session.cdpEndpoint, { timeout: 30_000 });
   }
@@ -297,6 +331,8 @@ export class SolariBrowserSurface extends PlaywrightSurface {
   protected async disconnect(): Promise<void> {
     const id = this.sessionId;
     this.sessionId = null;
+    this.unregister?.();
+    this.unregister = null;
     this.endedAt = Date.now();
     // Closing the socket does not release a session: always DELETE it.
     if (id && this.solari) await this.solari.sessions.releaseAndWait(id).catch(() => {});
@@ -323,7 +359,10 @@ export class SolariDesktopSurface implements Surface {
     return 0;
   }
 
-  async open(): Promise<void> {
+  /** Browser used for a web UI on the desktop (set by open). */
+  browser: string | null = null;
+
+  async open(url: string | null): Promise<void> {
     for (let i = 0; i < 40; i++) {
       const h = await this.desktop.health().catch(() => null);
       if (h?.ready && h.display) break;
@@ -336,7 +375,29 @@ export class SolariDesktopSurface implements Surface {
       this.recording = false;
     }
     this.videoStartedAt = Date.now();
+    if (url) await this.openBrowser(url);
     await sleep(1500); // give the app a moment to draw its window
+  }
+
+  /**
+   * Show a web UI served inside the desktop VM: open the first browser the image
+   * has at the in-VM URL. The app name is not documented, so probe for it.
+   */
+  private async openBrowser(url: string): Promise<void> {
+    const probe = await this.desktop.commands.run("sh", {
+      args: ["-c", "for b in google-chrome google-chrome-stable chromium chromium-browser firefox; do command -v $b >/dev/null 2>&1 && { echo $b; exit 0; }; done; echo none"],
+    });
+    const bin = probe.stdout.trim().split("\n").pop() ?? "none";
+    if (bin === "none") throw new Error("no browser found on the desktop (tried google-chrome, chromium, firefox)");
+    const args = bin.includes("firefox") ? ["--new-window", url] : ["--no-first-run", "--no-default-browser-check", "--new-window", url];
+    this.browser = bin;
+    try {
+      await this.desktop.open(bin, args);
+    } catch {
+      const cmd = [bin, ...args].map(shellQuoteArg).join(" ");
+      await this.desktop.process.start("sh", { args: ["-c", `${DISPLAY_DETECT} (exec nohup ${cmd}) >/tmp/screener-browser.log 2>&1 </dev/null &`] });
+    }
+    await sleep(4000); // first launch of a browser is slow
   }
 
   async screenshot(): Promise<Buffer> {
@@ -412,9 +473,12 @@ export class SolariDesktopSurface implements Surface {
           if (c) await d.mouse.move(c[0], c[1]);
           const dir = String(input.scroll_direction ?? "down");
           const n = Math.min(Math.max(Number(input.scroll_amount ?? 3) || 3, 1), 20);
-          // mouse.scroll has no direction: use xdotool wheel clicks, else paging keys.
+          // mouse.scroll has no direction: use xdotool wheel clicks (on the right display,
+          // with a timeout), else paging keys.
           const btn = { up: "4", down: "5", left: "6", right: "7" }[dir] ?? "5";
-          const r = await d.commands.run("xdotool", { args: ["click", "--repeat", String(n), btn] }).catch(() => null);
+          const r = await d.commands
+            .run("sh", { args: ["-c", `${DISPLAY_DETECT} exec timeout 5 xdotool click --repeat ${n} ${btn}`] })
+            .catch(() => null);
           if (!r || r.exitCode !== 0) {
             for (let i = 0; i < Math.ceil(n / 3); i++) await d.keyboard.press(dir === "up" ? "Page_Up" : "Page_Down");
           }

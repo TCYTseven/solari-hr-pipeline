@@ -2,7 +2,7 @@
 // records, and every action becomes a captioned DemoStep.
 import type Anthropic from "@anthropic-ai/sdk";
 import type { DemoStep } from "../../lib/types";
-import { MODEL, UNTRUSTED_NOTICE, claude, describeClaudeError, isFatalClaudeError } from "../claude";
+import { MODEL, UNTRUSTED_NOTICE, claude, describeClaudeError, isFatalClaudeError, newNonce, supportsForcedToolChoice, untrusted } from "../claude";
 import { config } from "../config";
 import type { Triage } from "../triage";
 import { errMessage, isStopping, redact, truncate } from "../util";
@@ -105,7 +105,14 @@ export async function runDemoAgent(opts: DemoOptions): Promise<DemoResult> {
     return png;
   };
 
-  const first = await capture();
+  let first: Buffer;
+  try {
+    first = await capture();
+  } catch (err) {
+    const msg = `could not take the first screenshot: ${truncate(errMessage(err), 200)}`;
+    log(`# demo agent stopped: ${msg}`);
+    return { steps, summary: null, frames, liveFrames, durationSec: t(), actions, endedBy: "error", error: msg };
+  }
   pushStep({
     t: 0,
     action: surface.product === "desktop" ? "screenshot" : "navigate",
@@ -113,15 +120,23 @@ export async function runDemoAgent(opts: DemoOptions): Promise<DemoResult> {
     reasoning: "Loaded the app so the demo starts from its first screen.",
   });
 
+  const nonce = newNonce();
   const messages: Anthropic.MessageParam[] = [
     {
       role: "user",
       content: [
         {
           type: "text",
+          // Title, description and goal were written by triage from the candidate's
+          // files, so they are tagged as untrusted too.
           text:
-            `Project: ${triage.title}\nWhat it claims to do: ${triage.description}\n` +
-            `Demo goal: ${triage.demoGoal}\n\nHere is the current screen. Start the demo.`,
+            `Untrusted-data nonce: ${nonce}. What the screener knows about the app (derived from the candidate's repository):\n` +
+            untrusted(
+              "submission",
+              nonce,
+              `Project: ${triage.title}\nWhat it claims to do: ${triage.description}\nDemo goal: ${triage.demoGoal}`,
+            ) +
+            "\n\nHere is the current screen. Start the demo.",
         },
         imageBlock(first),
       ],
@@ -190,8 +205,14 @@ export async function runDemoAgent(opts: DemoOptions): Promise<DemoResult> {
           continue;
         }
         if (member === "screenshot") {
-          const png = await capture();
-          results.push({ ...base, content: [imageBlock(png)] });
+          try {
+            const png = await capture();
+            results.push({ ...base, content: [imageBlock(png)] });
+          } catch (err) {
+            failedEarlier = true;
+            results.push({ ...base, is_error: true, content: `Screenshot failed: ${truncate(errMessage(err), 300)}` });
+            log(`[${fmt(t())}] screenshot failed: ${errMessage(err)}`);
+          }
           continue;
         }
 
@@ -231,18 +252,20 @@ export async function runDemoAgent(opts: DemoOptions): Promise<DemoResult> {
     }
 
     if (!summary && endedBy !== "refusal" && !isStopping()) {
-      // Budget reached without finish_demo: ask for the summary with a forced tool call.
+      // Budget reached without finish_demo: ask for the summary. Force the tool where
+      // the model allows it; some models reject a forced tool_choice, so ask in words there.
       if (messages[messages.length - 1]?.role === "assistant") {
         messages.push({ role: "user", content: "The demo budget is used up." });
       }
-      messages.push({ role: "user", content: "Call finish_demo now with a summary of what you observed." });
+      messages.push({ role: "user", content: "Do not take any more computer actions. Call finish_demo now with a summary of what you observed." });
+      const forced = supportsForcedToolChoice(MODEL());
       const res = await claude().messages.create({
         model: MODEL(),
-        max_tokens: 1024,
+        max_tokens: 4096,
         system,
         tools: TOOLS,
-        tool_choice: { type: "tool", name: "finish_demo" },
-        thinking: { type: "disabled" },
+        ...(forced ? { tool_choice: { type: "tool" as const, name: "finish_demo" } } : {}),
+        output_config: { effort: "low" },
         messages,
       });
       const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "finish_demo");

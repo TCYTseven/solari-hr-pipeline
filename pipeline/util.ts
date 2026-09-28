@@ -152,6 +152,21 @@ export function redact(text: string, secrets: string[] = []): string {
     .replace(/([?&](?:pt_token|token|access_token|key)=)[^&\s"']+/gi, "$1••••");
 }
 
+/**
+ * `redact` applied to every string inside a value (arrays and plain objects are
+ * walked; Dates, Buffers and numbers pass through). Pure.
+ */
+export function redactDeep<T>(value: T, secrets: string[] = []): T {
+  if (typeof value === "string") return redact(value, secrets) as T;
+  if (Array.isArray(value)) return value.map((v) => redactDeep(v, secrets)) as T;
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = redactDeep(v, secrets);
+    return out as T;
+  }
+  return value;
+}
+
 export function truncate(s: string, n: number): string {
   const one = s.replace(/\s+/g, " ").trim();
   if (one.length <= n) return one;

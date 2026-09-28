@@ -34,6 +34,11 @@ export const config = {
   databaseUrl: opt("DATABASE_URL"),
   solariApiKey: opt("SOLARI_API_KEY"),
   solariBaseUrl: opt("SOLARI_BASE_URL"),
+  /**
+   * "package" makes the Solari SDK use the `ws` package instead of Node 22's native
+   * WebSocket (which cannot send the Authorization header). Default: native.
+   */
+  solariWs: str("SOLARI_WS", "native") as "native" | "package",
   intervalMin: num("SCREENER_INTERVAL_MIN", 30),
   workDir: path.resolve(root, str("SCREENER_WORK_DIR", ".screener/work")),
   mediaDir: path.resolve(root, str("MEDIA_DIR", ".screener/media")),
@@ -65,6 +70,22 @@ export function submissionEnv(env: Record<string, string | undefined> = process.
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) out[name] = v;
   }
   return out;
+}
+
+/** The screener's own credentials: a submission must never be given the same value. */
+export const SCREENER_KEYS = ["SOLARI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"] as const;
+
+/**
+ * Names X where SUBMISSION_X holds the screener's own X. Pure. A shared Solari key
+ * would let a submission list and kill the screener's (and other candidates') VMs,
+ * since they are all tagged in metadata; a shared Anthropic/GitHub key leaks spend and access.
+ */
+export function sharedSecretConflicts(env: Record<string, string | undefined> = process.env): string[] {
+  return SCREENER_KEYS.filter((k) => {
+    const own = env[k]?.trim();
+    const given = env[`SUBMISSION_${k}`]?.trim();
+    return !!own && !!given && own === given;
+  });
 }
 
 /** Values that must never appear in logs, captions or labels. */

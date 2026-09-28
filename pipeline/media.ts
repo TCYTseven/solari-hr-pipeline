@@ -37,9 +37,15 @@ export function chromiumExecutable(): string | undefined {
   return undefined;
 }
 
+export function runningAsRoot(): boolean {
+  return typeof process.getuid === "function" && process.getuid() === 0;
+}
+
 export async function launchLocalChromium(): Promise<Browser> {
   try {
-    return await chromium.launch({ headless: true, executablePath: chromiumExecutable() });
+    // Untrusted pages load in this browser: keep Chromium's own sandbox on. It cannot
+    // start as root (as in some CI containers), so only there it is turned off.
+    return await chromium.launch({ headless: true, executablePath: chromiumExecutable(), chromiumSandbox: !runningAsRoot() });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/Executable doesn't exist|browserType\.launch/i.test(msg) && !chromiumExecutable()) {

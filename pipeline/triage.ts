@@ -1,12 +1,11 @@
 // Triage: Claude reads the candidate's project and says what it is and how to run it.
-import fs from "node:fs";
 import path from "node:path";
 import { AnthropicError } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { Product, ProjectType, StackItem } from "../lib/types";
-import { MODEL, RefusalError, UNTRUSTED_NOTICE, claude } from "./claude";
+import { MODEL, RefusalError, UNTRUSTED_NOTICE, claude, newNonce, untrusted } from "./claude";
 import { config } from "./config";
+import { containedPath, readContained } from "./fsguard";
 import type { TriageContext, Workspace } from "./workspace";
 
 export const TriageSchema = z.object({
@@ -31,11 +30,33 @@ export const TriageSchema = z.object({
 
 export type Triage = z.infer<typeof TriageSchema>;
 
-const SYSTEM = `You triage hiring-challenge submissions for Solari (cloud browsers, sandbox microVMs and desktops behind one API key). Each submission is a fork of the Solari cookbook where a candidate added a project built on Solari. You read the project and decide how an automated screener should install, run and demo it.
+/** Where the project will run; the triage prompt describes exactly that environment. */
+export type RunEnvironment = "docker" | "solari";
+
+/** What the screener's box offers, per executor. Pure. */
+export function environmentText(env: RunEnvironment): string {
+  if (env === "docker") {
+    return (
+      "The screener runs the project inside a fresh Linux container (Debian bookworm) that has Node 22 with npm, " +
+      "Python 3.11 (`python` and `python3`) with pip (system installs allowed, PIP_BREAK_SYSTEM_PACKAGES=1), " +
+      "python3 -m venv, uv (when the image could install it), git, build-essential and curl. There is no GUI and no Docker."
+    );
+  }
+  return (
+    "The screener runs the project inside a fresh Solari sandbox microVM (Linux). Its documented tools are only python3, " +
+    "node with npm, build-essential and git; versions are not documented, so do not rely on a specific Node or Python " +
+    "version or on other preinstalled tools. The screener adds `python` (-> python3) and `pip` (-> python3 -m pip) " +
+    "when they are missing, and tries to install uv. GUI apps run on a Solari desktop VM with the same tools plus a " +
+    "desktop session. There is no Docker."
+  );
+}
+
+function systemPrompt(env: RunEnvironment): string {
+  return `You triage hiring-challenge submissions for Solari (cloud browsers, sandbox microVMs and desktops behind one API key). Each submission is a fork of the Solari cookbook where a candidate added a project built on Solari. You read the project and decide how an automated screener should install, run and demo it.
 
 ${UNTRUSTED_NOTICE}
 
-The screener runs the project inside a fresh Linux sandbox (Debian bookworm) that has Node 22 with npm, Python 3.11 with pip (system installs allowed, PIP_BREAK_SYSTEM_PACKAGES=1), python3 -m venv, uv, git, build-essential and curl. There is no GUI in the sandbox and no Docker. Commands run with the working directory set to projectDir, as argv arrays (no shell). If you need shell features, use ["sh", "-c", "..."]. For servers the screener sets PORT and HOST=0.0.0.0 and waits for the port to answer.
+${environmentText(env)} Commands run with the working directory set to projectDir, as argv arrays (no shell). If you need shell features, use ["sh", "-c", "..."]. For servers the screener sets PORT and HOST=0.0.0.0 and waits for the port to answer.
 
 Rules:
 - install: the minimum commands to install dependencies. Use ["npm", "ci"] when a package-lock.json exists, else ["npm", "install"]; for Python use ["pip", "install", "-r", "requirements.txt"] or ["pip", "install", "."]/["pip", "install", "-e", "."] for pyproject projects. Add a build step (e.g. ["npm", "run", "build"]) only if the run command needs it. Empty array if nothing to install.
@@ -48,25 +69,26 @@ Rules:
 - runTimeoutSec: 60-180 for servers (time to open the port), up to 300 for scripts that do real work.
 - stack: 3-4 items with Simple Icons slugs (python, nodedotjs, typescript, javascript, googlechrome, docker, react, nextdotjs, fastapi, flask, vite, tailwindcss, anthropic, claude, ...) and human names.
 - description: plain text, no markdown, at most 220 characters.`;
+}
 
 function buildPrompt(ws: Workspace, ctx: TriageContext): string {
-  return `The candidate's changes are in the fork below. The screener guessed the project directory is "${ws.projectDir}" from the changed files; correct it if the evidence says otherwise.
+  const nonce = newNonce();
+  return `The candidate's changes are in the fork below (untrusted-data nonce: ${nonce}). The screener guessed the project directory is "${ws.projectDir}" from the changed files; correct it if the evidence says otherwise.
 
-<repository>
-${ctx.text}
-</repository>
+${untrusted("repository", nonce, ctx.text)}
 
 Return the triage for this project.`;
 }
 
 const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
-const AUTO_ENV = new Set(["PORT", "HOST", "HOSTNAME", "CI", "NODE_ENV", "PATH", "HOME"]);
+const AUTO_ENV = new Set(["PORT", "HOST", "HOSTNAME", "CI", "NODE_ENV", "PATH", "HOME", "DISPLAY"]);
 
 /** Clamp and sanity-check a triage so later stages can trust its shape. */
 export function normalizeTriage(t: Triage, ws: Pick<Workspace, "dir" | "projectDir">): Triage {
   const envs = (xs: string[]) => [...new Set(xs.map((x) => x.trim()).filter((x) => ENV_NAME.test(x) && !AUTO_ENV.has(x)))];
   let projectDir = t.projectDir.trim().replace(/^\.\/+/, "").replace(/\/+$/, "") || ".";
-  if (projectDir.includes("..") || path.isAbsolute(projectDir) || !fs.existsSync(path.join(ws.dir, projectDir))) {
+  // Must be a real directory inside the checkout (no "..", absolute paths or symlinks out).
+  if (projectDir.split("/").includes("..") || path.isAbsolute(projectDir) || !containedPath(ws.dir, projectDir, "dir")) {
     projectDir = ws.projectDir;
   }
   const argv = (a: string[]) => a.map((s) => String(s)).filter((s) => s.length > 0);
@@ -105,16 +127,17 @@ export function normalizeTriage(t: Triage, ws: Pick<Workspace, "dir" | "projectD
 
 /** Rough triage from manifests alone, used when Claude declines or fails. */
 export function heuristicTriage(ws: Pick<Workspace, "dir" | "projectDir">): Triage {
-  const dir = path.join(ws.dir, ws.projectDir);
-  const has = (f: string) => fs.existsSync(path.join(dir, f));
-  const name = path.basename(ws.projectDir === "." ? ws.dir : ws.projectDir);
+  const proj = containedPath(ws.dir, ws.projectDir, "dir") ? ws.projectDir : ".";
+  const rel = (f: string) => (proj === "." ? f : path.posix.join(proj, f));
+  const has = (f: string) => containedPath(ws.dir, rel(f), "file") != null;
+  const name = path.basename(proj === "." ? ws.dir : proj);
   const base: Triage = {
     title: name.replace(/[-_]+/g, " "),
     description: "",
     projectType: "cli",
     stack: [],
     productsUsed: [],
-    projectDir: ws.projectDir,
+    projectDir: proj,
     install: [],
     run: ["sh", "-c", "ls -la"],
     server: false,
@@ -128,7 +151,7 @@ export function heuristicTriage(ws: Pick<Workspace, "dir" | "projectDir">): Tria
   if (has("package.json")) {
     let scripts: Record<string, string> = {};
     try {
-      scripts = (JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as { scripts?: Record<string, string> }).scripts ?? {};
+      scripts = (JSON.parse(readContained(ws.dir, rel("package.json"), 200_000) ?? "{}") as { scripts?: Record<string, string> }).scripts ?? {};
     } catch {
       /* ignore */
     }
@@ -154,27 +177,15 @@ export interface TriageResult {
   note?: string;
 }
 
-export async function triage(ws: Workspace, ctx: TriageContext): Promise<TriageResult> {
+export async function triage(ws: Workspace, ctx: TriageContext, env: RunEnvironment): Promise<TriageResult> {
   const msg = await claude().messages.parse({
     model: MODEL(),
     max_tokens: 8000,
-    system: SYSTEM,
+    system: systemPrompt(env),
     output_config: { format: zodOutputFormat(TriageSchema), effort: "medium" },
     messages: [{ role: "user", content: buildPrompt(ws, ctx) }],
   });
   if (msg.stop_reason === "refusal") throw new RefusalError("triage", msg.stop_details?.category);
   if (!msg.parsed_output) throw new AnthropicError(`triage returned no structured output (stop_reason ${msg.stop_reason})`);
   return { triage: normalizeTriage(msg.parsed_output, ws), raw: msg.parsed_output, source: "claude" };
-}
-
-export function toStack(t: Triage): StackItem[] {
-  return t.stack;
-}
-
-export function toProducts(t: Triage): Product[] {
-  return t.productsUsed as Product[];
-}
-
-export function toProjectType(t: Triage): ProjectType {
-  return t.projectType as ProjectType;
 }

@@ -1,4 +1,5 @@
 // Per-fork orchestration: workspace -> triage -> build/boot -> demo -> score -> Postgres.
+import fs from "node:fs";
 import type { DemoStep, Product, StageName, Status } from "../lib/types";
 import { describeClaudeError, isFatalClaudeError } from "./claude";
 import { config, secretValues, submissionEnv } from "./config";
@@ -7,13 +8,13 @@ import { toVtt } from "./demo/captions";
 import { LocalBrowserSurface, SolariBrowserSurface, SolariDesktopSurface, type Surface } from "./demo/surfaces";
 import type { ForkRef, RemoteHeads } from "./discover";
 import { SolariBox, isFatalSolariError } from "./executors/solari";
-import { type Box, type ExecResult, type Executor, RELAY_PID, parseListeningPorts, pickAppPort } from "./executors/types";
+import { type Box, type ExecResult, type Executor, parseListeningPorts, parseReadiness, pickAppPort, readinessScript } from "./executors/types";
 import { type MediaRun, encodeFramesWebm, mediaRun, renderTerminalPng, writeAtomic } from "./media";
 import { RunRecorder, timed } from "./recorder";
 import { type FailureReason, type ScoreResult, scoreSubmission } from "./score";
-import type { LastRun, Store } from "./store";
+import type { LastRun, ScreenerErrorKind, Store } from "./store";
 import { type Triage, type TriageResult, heuristicTriage, triage as runTriage } from "./triage";
-import { InterruptedError, errMessage, errorTail, shellQuote, sleep, throwIfStopping, truncate } from "./util";
+import { InterruptedError, errMessage, errorTail, redact, shellQuote, sleep, throwIfStopping, truncate } from "./util";
 import { type Workspace, archiveCommit, collectContext, prepareWorkspace } from "./workspace";
 
 export interface ScreenOptions {
@@ -38,24 +39,47 @@ export function fingerprint(heads: RemoteHeads): SourceFingerprint {
   return { defaultBranch: heads.defaultBranch, defaultSha: heads.headSha, heads: [...new Set(heads.heads.map((h) => h.sha))].sort() };
 }
 
-/**
- * Skip a fork when nothing changed since its last finished run. Never skips
- * after a screener error, or after needs_secrets once every missing variable
- * is available as SUBMISSION_<NAME>. Pure.
- */
-export function shouldSkip(last: LastRun | null, heads: RemoteHeads, availableEnv: Set<string> = new Set()): boolean {
-  if (!last) return false;
-  if (last.failureReason === "Screener error") return false;
-  if (last.status === "needs_secrets") {
-    const required = (last.triage as { requiredEnv?: unknown } | null)?.requiredEnv;
-    if (Array.isArray(required) && required.length > 0 && required.every((n) => typeof n === "string" && availableEnv.has(n))) return false;
-  }
-  const fp = (last.triage as { _source?: SourceFingerprint } | null)?._source;
+/** Consecutive screener errors on the same fork state before the fork is skipped (until --force). */
+export const MAX_SCREENER_ERRORS = 3;
+
+function sameState(run: LastRun, heads: RemoteHeads): boolean {
+  const fp = (run.triage as { _source?: SourceFingerprint } | null)?._source;
   if (fp && Array.isArray(fp.heads)) {
     const now = fingerprint(heads);
     return fp.defaultSha === now.defaultSha && fp.heads.length === now.heads.length && fp.heads.every((s, i) => s === now.heads[i]);
   }
-  return last.commitSha != null && last.commitSha === heads.headSha;
+  return run.commitSha != null && run.commitSha === heads.headSha;
+}
+
+function errorKind(run: LastRun): ScreenerErrorKind | null {
+  if (run.failureReason !== "Screener error") return null;
+  const kind = (run.triage as { _screener?: { error?: unknown } } | null)?._screener?.error;
+  return kind === "interrupted" || kind === "stale" ? kind : "error";
+}
+
+/**
+ * Why to skip a fork this scan, or null to screen it. `history` is the fork's
+ * latest finished runs, newest first. Skips when nothing changed since the last
+ * run; retries screener errors, but not a 4th time in a row on the same fork state
+ * (interruptions do not count); rescreens needs_secrets once every missing
+ * variable is available as SUBMISSION_<NAME>. Pure.
+ */
+export function shouldSkip(history: LastRun[], heads: RemoteHeads, availableEnv: Set<string> = new Set()): string | null {
+  const last = history[0];
+  if (!last) return null;
+  if (errorKind(last)) {
+    let n = 0;
+    for (const run of history) {
+      if (errorKind(run) !== "error" || !sameState(run, heads)) break;
+      n++;
+    }
+    return n >= MAX_SCREENER_ERRORS ? `${n} screener errors in a row on this commit; use --owner or --force to retry` : null;
+  }
+  if (last.status === "needs_secrets") {
+    const required = (last.triage as { requiredEnv?: unknown } | null)?.requiredEnv;
+    if (Array.isArray(required) && required.length > 0 && required.every((n) => typeof n === "string" && availableEnv.has(n))) return null;
+  }
+  return sameState(last, heads) ? `unchanged since last run (${heads.headSha?.slice(0, 7)})` : null;
 }
 
 /** Card error tail for a missing-secrets run. Pure. */
@@ -63,8 +87,32 @@ export function missingSecretsTail(missing: string[]): string[] {
   return [`Missing required env: ${missing.join(", ")}`, `The screener only passes SUBMISSION_<NAME> vars (e.g. SUBMISSION_${missing[0]}).`];
 }
 
+/** Env every submission gets besides its SUBMISSION_* values. */
+export function baseSubmissionEnv(t: Pick<Triage, "server" | "port">): Record<string, string> {
+  return {
+    CI: "1",
+    HOST: "0.0.0.0",
+    BROWSER: "none",
+    PYTHONUNBUFFERED: "1",
+    PIP_BREAK_SYSTEM_PACKAGES: "1",
+    NPM_CONFIG_UPDATE_NOTIFIER: "false",
+    // Dev servers check the Host header; the relay rewrites it, and these cover apps
+    // reached another way (Vite >= 6 and create-react-app / webpack-dev-server).
+    __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: ".preview.getsolari.com",
+    DANGEROUSLY_DISABLE_HOST_CHECK: "true",
+    ...(t.server && t.port ? { PORT: String(t.port) } : {}),
+  };
+}
+
 /** Runs in progress in this process (marked abandoned on Ctrl-C). Maps runId -> owner. */
 export const activeRuns = new Map<string, string>();
+
+/** The owner opted out while their fork was being screened. */
+class OptedOutError extends Error {
+  constructor() {
+    super("owner opted out during the run");
+  }
+}
 
 const RUN_LOG = "/tmp/screener-run.log";
 const RUN_PID = "/tmp/screener-run.pid";
@@ -79,16 +127,28 @@ class Outcome {
 
 export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: ScreenOptions): Promise<Status> {
   const { store, executor } = opts;
+  const say = (m: string) => opts.say(`[${fork.owner}] ${m}`);
+  // The owner may have opted out after discovery: never start a run for them.
+  if (await store.isOptedOut(fork.owner)) {
+    say("opted out: not screened");
+    return "opted_out";
+  }
   const secrets = secretValues();
   const runId = await store.beginRun(fork.owner, heads.headSha);
   activeRuns.set(runId, fork.owner);
-  const say = (m: string) => opts.say(`[${fork.owner}] ${m}`);
   const rec = new RunRecorder(store, runId, secrets, opts.verbose ? (tab, text) => process.stdout.write(`[${fork.owner}:${tab}] ${text}`) : undefined);
   const fp = fingerprint(heads);
+  // runs.triage: the model's triage plus screener bookkeeping; kept on every exit path.
+  let triageJson: Record<string, unknown> = { _source: fp };
   let box: Box | null = null;
   let surface: Surface | null = null;
   let media: MediaRun | null = null;
   const vm = { count: 0, seconds: 0 };
+  const local = executor.kind === "docker";
+
+  const ensureNotOptedOut = async () => {
+    if (await store.isOptedOut(fork.owner)) throw new OptedOutError();
+  };
 
   const finalizeRelease = async () => {
     if (surface) {
@@ -127,13 +187,18 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
 
     if (ws.changes.length === 0) {
       say("no changes from upstream: skipped");
-      await rec.flush({ status: "skipped", finishedAt: new Date(), streamUrl: null, triage: { _source: fp } });
+      await rec.flush({ status: "skipped", finishedAt: new Date(), streamUrl: null, triage: triageJson });
       await store.updateSubmission(fork.owner, {
         status: "skipped",
         summary: "No changes from upstream",
         score: null,
         errorTail: null,
         bootMs: null,
+        demoProduct: null,
+        thumbnailUrl: null,
+        previewUrl: null,
+        videoUrl: null,
+        captionsUrl: null,
         scannedAt: new Date(),
       });
       return "skipped";
@@ -143,7 +208,7 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
     const ctx = collectContext(ws);
     let tri: TriageResult;
     try {
-      tri = await runTriage(ws, ctx);
+      tri = await runTriage(ws, ctx, executor.kind);
     } catch (err) {
       if (isFatalClaudeError(err)) throw err;
       const note = `Triage by Claude failed (${describeClaudeError(err)}); used a manifest-based guess.`;
@@ -153,7 +218,12 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
     throwIfStopping();
     const t = tri.triage;
     say(`triaged: ${t.projectType}, ${t.demoSurface} demo, run ${JSON.stringify(t.run)}${t.server ? ` on :${t.port}` : ""}`);
-    rec.set({ triage: { ...(tri.raw && typeof tri.raw === "object" ? tri.raw : {}), _source: fp, _screener: { projectDir: t.projectDir, triagedBy: tri.source } } });
+    triageJson = {
+      ...(tri.raw && typeof tri.raw === "object" ? (tri.raw as Record<string, unknown>) : {}),
+      _source: fp,
+      _screener: { projectDir: t.projectDir, triagedBy: tri.source, executor: executor.kind },
+    };
+    rec.set({ triage: triageJson });
     await store.updateSubmission(fork.owner, {
       title: t.title,
       description: t.description,
@@ -179,22 +249,13 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
     } else {
       // 4. Build + boot ------------------------------------------------------------------
       const kind = executor.kind === "solari" && t.demoSurface === "desktop" ? "desktop" : "sandbox";
-      const env: Record<string, string> = {
-        ...subEnv,
-        CI: "1",
-        HOST: "0.0.0.0",
-        BROWSER: "none",
-        PYTHONUNBUFFERED: "1",
-        PIP_BREAK_SYSTEM_PACKAGES: "1",
-        NPM_CONFIG_UPDATE_NOTIFIER: "false",
-        ...(t.server && t.port ? { PORT: String(t.port) } : {}),
-      };
-      box = executor.box({ owner: fork.owner, runId, env, kind });
+      box = executor.box({ owner: fork.owner, runId, env: { ...subEnv, ...baseSubmissionEnv(t) }, kind });
       bootMs = await buildAndBoot(box, ws, t, rec, outcome, say);
 
       // 5. Demo ------------------------------------------------------------------------
       throwIfStopping();
       if (outcome.status === "booted" && opts.demo) {
+        await ensureNotOptedOut();
         media = mediaRun(fork.owner, runId);
         const r = await runDemo(box, t, outcome, rec, media, secrets, say, (s) => (surface = s));
         demo = r.demo;
@@ -238,6 +299,8 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
       say(scoreNote);
     }
 
+    // The owner may have opted out while this ran: drop the media, write nothing.
+    await ensureNotOptedOut();
     const failureReason: FailureReason | string | null =
       outcome.status === "booted" ? null : (scored?.failureReason ?? defaultFailure(outcome.status, outcome.note));
     await rec.flush({
@@ -255,7 +318,8 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
       score: scored?.score ?? null,
       summary: scored?.summary ?? scoreNote ?? null,
       errorTail: outcome.status === "booted" ? null : outcome.errorTail,
-      demoProduct,
+      // Local Chromium and Docker are not Solari products: no product badge for local demos.
+      demoProduct: local ? null : demoProduct,
       thumbnailUrl: files.thumb && media ? media.url(files.thumb) : null,
       videoUrl: files.video && media ? media.url(files.video) : null,
       previewUrl: files.video && media ? media.url(files.video) : null,
@@ -266,9 +330,17 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
     return outcome.status;
   } catch (err) {
     await finalizeRelease().catch(() => {});
-    const msg = err instanceof InterruptedError ? "run interrupted" : errMessage(err);
+    if (err instanceof OptedOutError) {
+      say("opted out during the run: discarded");
+      if (media) fs.rmSync(media.dir, { recursive: true, force: true });
+      await rec.flush({ status: "opted_out", finishedAt: new Date(), streamUrl: null, triage: triageJson, vmCount: vm.count });
+      return "opted_out";
+    }
+    const interrupted = err instanceof InterruptedError;
+    const msg = interrupted ? "run interrupted" : errMessage(err);
     say(`screener error: ${msg}`);
     rec.log("install", `\n# Screener error: ${msg}\n`);
+    const screener = (triageJson._screener as Record<string, unknown> | undefined) ?? {};
     await rec.flush({
       status: "skipped",
       finishedAt: new Date(),
@@ -276,11 +348,11 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
       failureReason: "Screener error",
       vmCount: vm.count,
       vmSeconds: Math.round(vm.seconds * 10) / 10,
-      triage: { _source: fp },
+      triage: { ...triageJson, _screener: { ...screener, error: (interrupted ? "interrupted" : "error") satisfies ScreenerErrorKind } },
     });
     // Back to queued so the next scan retries it; the dashboard shows why.
     await store.updateSubmission(fork.owner, { status: "queued", errorTail: [`Screener error: ${truncate(msg, 200)}`] });
-    if (isFatalClaudeError(err) || isFatalSolariError(err) || err instanceof InterruptedError) throw err;
+    if (isFatalClaudeError(err) || isFatalSolariError(err) || interrupted) throw err;
     return "queued";
   } finally {
     await finalizeRelease().catch(() => {});
@@ -297,6 +369,8 @@ function defaultFailure(status: Status, note: string | null): FailureReason {
 
 // ---------------------------------------------------------------------------
 
+type Fail = (status: Status, output: string, note: string, extra?: string) => void;
+
 async function buildAndBoot(
   box: Box,
   ws: Workspace,
@@ -312,7 +386,7 @@ async function buildAndBoot(
     rec.timing(box.surface, name, r.ms);
     return r.value;
   };
-  const fail = (status: Status, output: string, note: string, extra?: string) => {
+  const fail: Fail = (status, output, note, extra) => {
     out.status = status;
     out.note = note;
     const tail = errorTail(output, extra ? 3 : 4);
@@ -320,7 +394,7 @@ async function buildAndBoot(
   };
 
   say(`creating ${box.surface.toLowerCase()}`);
-  await stage("create", () => box.create());
+  await stage("create", () => box.create((s) => rec.log("install", s)));
   throwIfStopping();
   rec.cmd("install", box.description);
 
@@ -362,67 +436,9 @@ async function buildAndBoot(
   throwIfStopping();
   const runScript = shellQuote(t.run);
   rec.cmd("run", `${t.projectDir !== "." ? `cd ${t.projectDir} && ` : ""}${runScript}`);
-  if (t.server && t.port) {
-    say(`starting server on :${t.port}`);
-    await stage("boot", async () => {
-      const listening = async () =>
-        parseListeningPorts((await box.exec("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; true", { cwd: "/", timeoutSec: 20 })).output);
-      const baseline = await listening().catch(() => [] as number[]);
-      await box.startBackground(runScript, { cwd: t.projectDir, logFile: RUN_LOG, pidFile: RUN_PID });
-      let target = t.port!;
-      out.appUrl = await box.exposePort(target);
-      const started = Date.now();
-      const deadline = started + t.runTimeoutSec * 1000;
-      let offset = 0;
-      let lastPoll = 0;
-      const pull = async (): Promise<boolean> => {
-        const r = await box.exec(
-          `if kill -0 "$(cat ${RUN_PID} 2>/dev/null)" 2>/dev/null; then echo __ALIVE__; else echo __DEAD__; fi; tail -c +${offset + 1} ${RUN_LOG} 2>/dev/null`,
-          { cwd: "/", timeoutSec: 20 },
-        );
-        const nl = r.output.indexOf("\n");
-        const alive = r.output.slice(0, nl).trim() === "__ALIVE__";
-        const text = r.output.slice(nl + 1);
-        if (text) {
-          offset += Buffer.byteLength(text);
-          out.runOutput += text;
-          rec.log("run", text);
-        }
-        return alive;
-      };
-      while (Date.now() < deadline) {
-        if (await probe(out.appUrl)) {
-          await pull().catch(() => true);
-          rec.log("run", `\n# Port ${target} answered after ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
-          return;
-        }
-        if (Date.now() - lastPoll > 2000) {
-          lastPoll = Date.now();
-          const alive = await pull().catch(() => true);
-          if (!alive) {
-            await sleep(500);
-            await pull().catch(() => false);
-            fail("build_failed", out.runOutput, "Crashed on start", "Process exited before the port opened");
-            return;
-          }
-          // The app may ignore PORT and listen elsewhere: follow it with the relay.
-          if (Date.now() - started > 3000) {
-            const now = await listening().catch(() => [] as number[]);
-            const better = pickAppPort(now, baseline, [box.relayPort], out.runOutput, target);
-            if (better != null && better !== target) {
-              rec.log("run", `# :${target} is silent but the app listens on :${better}; relaying to :${better}\n`);
-              await box.exec(`kill "$(cat ${RELAY_PID} 2>/dev/null)" 2>/dev/null; rm -f ${RELAY_PID}; true`, { cwd: "/", timeoutSec: 20 });
-              target = better;
-              out.appUrl = await box.exposePort(target);
-              continue;
-            }
-          }
-        }
-        await sleep(750);
-      }
-      await pull().catch(() => true);
-      fail("timeout", out.runOutput, "Port never opened", `Port ${target} did not answer within ${t.runTimeoutSec}s`);
-    });
+  if ((t.server && t.port) || box.kind === "desktop") {
+    say(t.server ? `starting server on :${t.port}` : "starting the app on the desktop");
+    await stage("boot", () => bootInBackground(box, t, runScript, rec, out, fail));
   } else {
     say(`running (timeout ${t.runTimeoutSec}s)`);
     await stage("boot", async () => {
@@ -437,16 +453,102 @@ async function buildAndBoot(
   return total.create + total.clone + total.install + total.boot;
 }
 
-/** Any HTTP answer counts as up, except proxy errors from a preview gateway. */
-async function probe(url: string | null): Promise<boolean> {
-  if (!url) return false;
+/** Split the output of one boot poll into its parts. Pure. */
+export function parsePoll(output: string): { alive: boolean; up: boolean; status: number | null; ports: number[]; log: string } {
+  const logAt = output.indexOf("__LOG__\n");
+  const head = logAt >= 0 ? output.slice(0, logAt) : output;
+  const log = logAt >= 0 ? output.slice(logAt + "__LOG__\n".length) : "";
+  const portsAt = head.indexOf("__PORTS__");
+  const ready = parseReadiness(portsAt >= 0 ? head.slice(0, portsAt) : head);
+  return {
+    alive: /^__ALIVE__$/m.test(head),
+    up: ready.up,
+    status: ready.status,
+    ports: portsAt >= 0 ? parseListeningPorts(head.slice(portsAt)) : [],
+    log,
+  };
+}
+
+/**
+ * Start a server (or, on a desktop VM, a GUI app) in the background and decide
+ * readiness from inside the box: the process is alive and, for servers, the
+ * port answers HTTP locally. Only then is the port exposed for the demo.
+ */
+async function bootInBackground(box: Box, t: Triage, runScript: string, rec: RunRecorder, out: Outcome, fail: Fail): Promise<void> {
+  const server = !!(t.server && t.port);
+  let target = t.port ?? 0;
+  let offset = 0;
+  const poll = async () => {
+    const script = [
+      `if kill -0 "$(cat ${RUN_PID} 2>/dev/null)" 2>/dev/null; then echo __ALIVE__; else echo __DEAD__; fi`,
+      server ? readinessScript(target) : "",
+      server ? "echo __PORTS__; cat /proc/net/tcp /proc/net/tcp6 2>/dev/null" : "",
+      `echo __LOG__; tail -c +${offset + 1} ${RUN_LOG} 2>/dev/null; true`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const p = parsePoll((await box.exec(script, { cwd: "/", timeoutSec: 30 })).output);
+    if (p.log) {
+      offset += Buffer.byteLength(p.log);
+      out.runOutput += p.log;
+      rec.log("run", p.log);
+    }
+    return p;
+  };
+
+  const baseline = server
+    ? parseListeningPorts((await box.exec("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; true", { cwd: "/", timeoutSec: 20 })).output)
+    : [];
   try {
-    const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(5000) });
-    await res.body?.cancel().catch(() => {});
-    return ![502, 503, 504].includes(res.status);
-  } catch {
-    return false;
+    await box.startBackground(runScript, { cwd: t.projectDir, logFile: RUN_LOG, pidFile: RUN_PID });
+  } catch (err) {
+    fail("build_failed", errMessage(err), "Crashed on start", "The run command could not be started");
+    return;
   }
+  const started = Date.now();
+  const deadline = started + t.runTimeoutSec * 1000;
+
+  if (!server) {
+    // A GUI app on the desktop: booted once it has stayed up for a few seconds.
+    const settleMs = Math.min(8_000, t.runTimeoutSec * 1000);
+    while (Date.now() - started < settleMs) {
+      await sleep(1_000);
+      const p = await poll();
+      if (!p.alive) {
+        fail("build_failed", out.runOutput, "Crashed on start", "The app exited right after starting");
+        return;
+      }
+    }
+    rec.log("run", `\n# The app is running on the desktop after ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
+    return;
+  }
+
+  while (Date.now() < deadline) {
+    const p = await poll();
+    if (p.up) {
+      rec.log("run", `\n# Port ${target} answered HTTP ${p.status} inside the ${box.kind === "desktop" ? "desktop" : "sandbox"} after ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
+      // On a desktop the agent opens the app in the VM's own browser: no relay needed.
+      out.appUrl = box.kind === "desktop" ? `http://localhost:${target}/` : await box.exposePort(target);
+      return;
+    }
+    if (!p.alive) {
+      await sleep(500);
+      await poll().catch(() => null);
+      fail("build_failed", out.runOutput, "Crashed on start", "Process exited before the port opened");
+      return;
+    }
+    // The app may ignore PORT and listen elsewhere: follow it.
+    if (Date.now() - started > 3000) {
+      const better = pickAppPort(p.ports, baseline, [box.relayPort], out.runOutput, target);
+      if (better != null && better !== target) {
+        rec.log("run", `# :${target} is silent but the app listens on :${better}; using :${better}\n`);
+        target = better;
+        continue;
+      }
+    }
+    await sleep(1_000);
+  }
+  fail("timeout", out.runOutput, "Port never opened", `Port ${target} did not answer within ${t.runTimeoutSec}s`);
 }
 
 async function runDemo(
@@ -469,10 +571,14 @@ async function runDemo(
   }
 
   if (!surface) {
-    // CLI / script: the run output is the demo. Thumbnail = the terminal.
+    // CLI / script: the run output is the demo. Thumbnail = the terminal (redacted: it is public).
     rec.log("demo", "# CLI project: no agent demo; the run output is the demo.\n");
     try {
-      await renderTerminalPng(`${t.title}  $ ${shellQuote(t.run)}`, out.runOutput || "(no output)", media.file("thumb.png"));
+      await renderTerminalPng(
+        redact(`${t.title}  $ ${shellQuote(t.run)}`, secrets),
+        redact(out.runOutput || "(no output)", secrets),
+        media.file("thumb.png"),
+      );
       files.thumb = "thumb.png";
     } catch (err) {
       rec.log("demo", `# thumbnail render failed: ${errMessage(err)}\n`);
@@ -483,7 +589,8 @@ async function runDemo(
   track(surface);
   say(`demoing on ${surface.label}`);
   const s = surface;
-  const opened = await timed(() => s.open(desktop ? null : out.appUrl));
+  // A desktop gets the in-VM URL (it opens its own browser), or null for a GUI app.
+  const opened = await timed(() => s.open(out.appUrl));
   if (s.label !== "Desktop") rec.timing(s.label, "create", opened.ms);
   rec.set({ streamUrl: media.url("live.jpg") });
   await rec.flush();
@@ -524,4 +631,3 @@ async function runDemo(
   rec.log("demo", `# demo ended (${result.endedBy}) after ${result.actions} actions, ${result.durationSec.toFixed(1)}s${video ? `, saved ${video}` : ", no video"}\n`);
   return { demo: result, product: s.product, files };
 }
-

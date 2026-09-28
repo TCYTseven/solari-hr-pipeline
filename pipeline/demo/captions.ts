@@ -44,18 +44,21 @@ const KEY_NAMES: Record<string, string> = {
   minus: "Minus", equal: "Equal", plus: "+", comma: ",", period: ".", slash: "/", semicolon: ";",
 };
 
-/** xdotool-style combo ("ctrl+shift+t", "Return", "Page_Down") to Playwright ("Control+Shift+t", "Enter"). */
-export function toPlaywrightKey(combo: string): string {
-  return combo
-    .split(/\+(?!$)/)
-    .map((raw) => {
-      const k = raw.trim();
-      const mapped = KEY_NAMES[k.toLowerCase()];
-      if (mapped) return mapped;
-      if (/^f([1-9]|1[0-2])$/i.test(k)) return k.toUpperCase();
-      return k;
-    })
-    .join("+");
+/**
+ * xdotool-style combo ("ctrl+shift+t", "Return", "Page_Down") to Playwright
+ * ("Control+Shift+t", "Enter"). With `macShortcuts` (a local browser on macOS),
+ * the edit shortcuts ctrl+a/c/v/x/z/y become Cmd, which is what the page expects there.
+ */
+export function toPlaywrightKey(combo: string, opts: { macShortcuts?: boolean } = {}): string {
+  const keys = combo.split(/\+(?!$)/).map((raw) => {
+    const k = raw.trim();
+    const mapped = KEY_NAMES[k.toLowerCase()];
+    if (mapped) return mapped;
+    if (/^f([1-9]|1[0-2])$/i.test(k)) return k.toUpperCase();
+    return k;
+  });
+  if (opts.macShortcuts && keys.length === 2 && keys[0] === "Control" && /^[acvxzy]$/i.test(keys[1]!)) keys[0] = "Meta";
+  return keys.join("+");
 }
 
 /** Human-readable key combo for captions: "ctrl+a" -> "Ctrl+A", "Return" -> "Enter". */

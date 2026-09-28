@@ -2,9 +2,10 @@
 // candidate changed, pick the project directory, and gather triage context.
 import fs from "node:fs";
 import path from "node:path";
-import { config } from "./config";
+import { config, secretValues } from "./config";
 import { GIT_ENV, type ForkRef, upstreamRef } from "./discover";
-import { mustRun, runProc } from "./util";
+import { containedPath, listContained, readContained } from "./fsguard";
+import { mustRun, redact, runProc } from "./util";
 
 export interface FileChange {
   /** git name-status letter: A, M, D, R, C, T */
@@ -34,6 +35,11 @@ const gitTry = (dir: string, args: string[], timeoutMs = 120_000) =>
   runProc("git", ["-C", dir, ...args], { env: GIT_ENV, timeoutMs });
 
 let mirrorPromise: Promise<{ dir: string; defaultBranch: string }> | null = null;
+
+/** Forget the cached mirror so the next ensureUpstreamMirror() fetches upstream again (once per scan). */
+export function resetUpstreamMirror(): void {
+  mirrorPromise = null;
+}
 
 /** Full bare mirror of the upstream, shared by every fork workspace. */
 export function ensureUpstreamMirror(): Promise<{ dir: string; defaultBranch: string }> {
@@ -211,7 +217,8 @@ export async function prepareWorkspace(fork: ForkRef, defaultBranch: string | nu
   await git(dir, ["clean", "-fdxq"]);
 
   let projectDir = deriveProjectDir(chosen.changes);
-  if (projectDir !== "." && !fs.existsSync(path.join(dir, projectDir))) projectDir = ".";
+  // The directory must really be inside the checkout (it could be a symlink to anywhere).
+  if (projectDir !== "." && !containedPath(dir, projectDir, "dir")) projectDir = ".";
 
   return {
     dir,
@@ -257,20 +264,11 @@ const ENTRY_CANDIDATES = [
   "app/page.tsx", "src/App.tsx", "streamlit_app.py",
 ];
 
-function readCapped(file: string, max: number): string | null {
-  try {
-    const st = fs.statSync(file);
-    if (!st.isFile()) return null;
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(Math.min(st.size, max));
-    fs.readSync(fd, buf, 0, buf.length, 0);
-    fs.closeSync(fd);
-    if (buf.includes(0)) return null; // binary
-    const text = buf.toString("utf8");
-    return st.size > max ? `${text}\n... (truncated, ${st.size} bytes total)` : text;
-  } catch {
-    return null;
-  }
+/** Read a checkout file for Claude: contained to the checkout (no symlink escapes), never inside .git. */
+function readRepo(root: string, rel: string, max: number): string | null {
+  const norm = path.posix.normalize(rel.replace(/\\/g, "/")).replace(/^\.\//, "");
+  if (/(^|\/)\.git(\/|$)/.test(norm)) return null;
+  return readContained(root, norm, max);
 }
 
 function headLines(text: string, n: number): string {
@@ -278,16 +276,12 @@ function headLines(text: string, n: number): string {
   return lines.length > n ? `${lines.slice(0, n).join("\n")}\n... (${lines.length - n} more lines)` : text;
 }
 
+/** File paths under `rel`. Symlinked directories are listed as entries but never walked. */
 function listFiles(root: string, rel: string, limit: number): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
     if (out.length >= limit) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(path.join(root, d), { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = listContained(root, d || ".");
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const e of entries) {
       const p = d ? `${d}/${e.name}` : e.name;
@@ -308,8 +302,8 @@ export interface TriageContext {
 
 /** Build the (size-capped) text Claude sees for triage and code-based scoring. */
 export function collectContext(ws: Workspace, budget = 60_000): TriageContext {
-  const proj = ws.projectDir;
-  const projAbs = path.join(ws.dir, proj);
+  const proj = containedPath(ws.dir, ws.projectDir, "dir") ? ws.projectDir : ".";
+  const inProj = (f: string) => (proj === "." ? f : path.posix.join(proj, f));
   const files = listFiles(ws.dir, proj, 300);
   const sections: string[] = [];
   const add = (title: string, body: string) => {
@@ -330,22 +324,24 @@ export function collectContext(ws: Workspace, budget = 60_000): TriageContext {
   );
   add(`FILE TREE (${proj})`, files.map((f) => (proj === "." ? f : path.relative(proj, f))).join("\n"));
 
-  const readmeName = fs.existsSync(projAbs) ? fs.readdirSync(projAbs).find((f) => /^readme(\.(md|rst|txt))?$/i.test(f)) : undefined;
-  const readme = readmeName ? readCapped(path.join(projAbs, readmeName), 10_000) : null;
-  if (readme) add(`README (${path.join(proj, readmeName!)})`, readme);
+  const readmeName = listContained(ws.dir, proj)
+    .map((e) => e.name)
+    .find((f) => /^readme(\.(md|rst|txt))?$/i.test(f));
+  const readme = readmeName ? readRepo(ws.dir, inProj(readmeName), 10_000) : null;
+  if (readme) add(`README (${inProj(readmeName!)})`, readme);
   else {
     const rootChanged = ws.changes.some((c) => /^readme\.md$/i.test(c.path));
-    const root = rootChanged ? readCapped(path.join(ws.dir, "README.md"), 6_000) : null;
+    const root = rootChanged ? readRepo(ws.dir, "README.md", 6_000) : null;
     if (root) add("ROOT README (changed by candidate)", root);
   }
 
   for (const m of MANIFESTS) {
-    const t = readCapped(path.join(projAbs, m), 4_000);
+    const t = readRepo(ws.dir, inProj(m), 4_000);
     if (t) add(`MANIFEST ${m}`, t);
   }
 
   const entries = new Set<string>();
-  const pkg = readCapped(path.join(projAbs, "package.json"), 20_000);
+  const pkg = readRepo(ws.dir, inProj("package.json"), 20_000);
   if (pkg) {
     try {
       const j = JSON.parse(pkg) as { main?: string; bin?: string | Record<string, string>; scripts?: Record<string, string> };
@@ -363,9 +359,10 @@ export function collectContext(ws: Workspace, budget = 60_000): TriageContext {
   let shown = 0;
   for (const e of entries) {
     if (shown >= 6) break;
-    const t = readCapped(path.join(projAbs, e.replace(/^\.\//, "")), 12_000);
+    // Paths from package.json are candidate-controlled: readRepo keeps them in the checkout.
+    const t = readRepo(ws.dir, inProj(e.replace(/^\.\//, "")), 12_000);
     if (!t) continue;
-    add(`ENTRY FILE ${path.join(proj, e)} (head)`, headLines(t, 90));
+    add(`ENTRY FILE ${inProj(e)} (head)`, headLines(t, 90));
     shown++;
   }
 
@@ -373,7 +370,7 @@ export function collectContext(ws: Workspace, budget = 60_000): TriageContext {
   const hits: string[] = [];
   for (const f of files) {
     if (!/\.(ts|tsx|js|mjs|cjs|py|rb|go|rs)$/.test(f) || hits.length >= 50) continue;
-    const t = readCapped(path.join(ws.dir, f), 200_000);
+    const t = readRepo(ws.dir, f, 200_000);
     if (!t) continue;
     t.split("\n").forEach((line, i) => {
       if (hits.length < 50 && /solari|sandboxes\.|desktops\.|previewUrl|\.launch\(|computer/i.test(line)) {
@@ -383,5 +380,6 @@ export function collectContext(ws: Workspace, budget = 60_000): TriageContext {
   }
   if (hits.length) add("SOLARI-RELATED LINES", hits.join("\n"));
 
-  return { text: sections.join("\n"), files };
+  // Belt and braces: never send one of the screener's own secrets to the model.
+  return { text: redact(sections.join("\n"), secretValues()), files };
 }

@@ -4,7 +4,7 @@ import { AnthropicError } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { DemoStep, Score, Status } from "../lib/types";
-import { MODEL, RefusalError, UNTRUSTED_NOTICE, claude } from "./claude";
+import { MODEL, RefusalError, UNTRUSTED_NOTICE, claude, newNonce, untrusted } from "./claude";
 import type { Triage } from "./triage";
 import { errorTail, twoParagraphs } from "./util";
 
@@ -104,30 +104,21 @@ export async function scoreSubmission(input: ScoreInput): Promise<ScoreResult> {
   const steps = input.steps.length
     ? input.steps.map((s) => `${s.t.toFixed(1)}s ${s.action}: ${s.label}${s.reasoning && s.reasoning !== s.label ? ` (${s.reasoning})` : ""}`).join("\n")
     : "(no demo)";
-  const text = `Screening result: status=${input.status}.
+  const nonce = newNonce();
+  const text = `Screening result: status=${input.status}. Untrusted-data nonce: ${nonce}.
 ${input.missingEnv.length ? `Not run because these required env vars were not provided to the screener: ${input.missingEnv.join(", ")}.\n` : ""}${input.notes.map((n) => `Note: ${n}\n`).join("")}
-Triage (how the screener understood the project):
-${JSON.stringify(input.triage, null, 2)}
+Triage (how the screener understood the project; derived from the candidate's files):
+${untrusted("triage", nonce, JSON.stringify(input.triage, null, 2))}
 
-<repository>
-${input.context}
-</repository>
+${untrusted("repository", nonce, input.context)}
 
-<logs>
-=== INSTALL LOG (tail) ===
-${tail(input.installLog, 40)}
+${untrusted(
+  "logs",
+  nonce,
+  `=== INSTALL LOG (tail) ===\n${tail(input.installLog, 40)}\n\n=== RUN LOG (tail) ===\n${tail(input.runLog, 40)}`,
+)}
 
-=== RUN LOG (tail) ===
-${tail(input.runLog, 40)}
-</logs>
-
-<page>
-=== DEMO STEPS ===
-${steps}
-
-=== DEMO AGENT SUMMARY ===
-${input.demoSummary ?? "(none)"}
-</page>
+${untrusted("page", nonce, `=== DEMO STEPS ===\n${steps}\n\n=== DEMO AGENT SUMMARY ===\n${input.demoSummary ?? "(none)"}`)}
 
 ${input.screenshots.length ? `The ${input.screenshots.length === 1 ? "image shows a frame" : "images show frames"} from the demo.` : "There are no demo frames."} Score the submission.`;
 
