@@ -208,7 +208,7 @@ export async function screenFork(fork: ForkRef, heads: RemoteHeads, opts: Screen
     const ctx = collectContext(ws);
     let tri: TriageResult;
     try {
-      tri = await runTriage(ws, ctx, executor.kind);
+      tri = await runTriage(ws, ctx, executor.kind, executor.environment());
     } catch (err) {
       if (isFatalClaudeError(err)) throw err;
       const note = `Triage by Claude failed (${describeClaudeError(err)}); used a manifest-based guess.`;

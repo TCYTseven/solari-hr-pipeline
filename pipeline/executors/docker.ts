@@ -21,6 +21,25 @@ export const DOCKER_LABEL = "solari-screener=1";
  */
 export const DOCKER_CAPS = ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID"];
 
+/** Turn the image probe's "key value" lines into a sentence for the triage prompt. Pure. */
+export function describeImageProbe(out: string): string {
+  const v = Object.fromEntries(
+    out
+      .split("\n")
+      .map((l) => l.trim().split(/\s+/))
+      .filter((p) => p.length >= 2)
+      .map(([k, ...rest]) => [k!, rest.join(" ")]),
+  ) as Record<string, string>;
+  const parts = [
+    `Node ${v.node ?? "?"} with npm`,
+    `Python ${v.python ?? "?"} (\`python\` and \`python3\`)`,
+    v.pip === "yes" ? "pip (system installs allowed, PIP_BREAK_SYSTEM_PACKAGES=1)" : "NO pip",
+    v.venv === "yes" ? "python3 -m venv" : "NO python3 -m venv (install with pip directly; never create a virtualenv)",
+    v.uv === "yes" ? "uv" : "no uv",
+  ];
+  return parts.join(", ");
+}
+
 /** `docker run` arguments for one submission container. Pure. */
 export function dockerRunArgs(o: { name: string; network: string; owner: string; runId: string; envFile: string }): string[] {
   return [
@@ -51,10 +70,17 @@ function contextHash(caPem: string | null): string {
 export class DockerExecutor implements Executor {
   readonly kind = "docker" as const;
   private ready: Promise<void> | null = null;
+  private env: string | null = null;
+
+  environment(): string | null {
+    return this.env;
+  }
 
   prepare(log: (s: string) => void): Promise<void> {
     this.ready ??= (async () => {
       await this.ensureImage(log);
+      this.env = await this.probeImage();
+      if (this.env) log(`sandbox image: ${this.env}`);
       // Local demos need local Chromium: fail the scan now, not once per fork.
       const browser = await launchLocalChromium();
       await browser.close();
@@ -63,6 +89,19 @@ export class DockerExecutor implements Executor {
       throw err;
     });
     return this.ready;
+  }
+
+  /** One throwaway container, no network: which tools the image really has. */
+  private async probeImage(): Promise<string | null> {
+    const script = [
+      'echo "node $(node --version 2>/dev/null || echo none)"',
+      'echo "python $(python3 --version 2>&1 | cut -d" " -f2)"',
+      'python3 -m pip --version >/dev/null 2>&1 && echo "pip yes" || echo "pip no"',
+      'python3 -c "import ensurepip" >/dev/null 2>&1 && echo "venv yes" || echo "venv no"',
+      'command -v uv >/dev/null 2>&1 && echo "uv yes" || echo "uv no"',
+    ].join("; ");
+    const r = await runProc("docker", ["run", "--rm", "--network", "none", "--label", DOCKER_LABEL, config.dockerImage, "sh", "-c", script], { timeoutMs: 60_000 });
+    return r.code === 0 ? describeImageProbe(r.stdout) : null;
   }
 
   async cleanupOrphans(log: (s: string) => void): Promise<void> {

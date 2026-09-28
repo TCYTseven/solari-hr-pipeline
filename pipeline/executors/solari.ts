@@ -61,10 +61,10 @@ const BIN = `${ROOT}/bin`;
 const IDLE_MS = 15 * 60_000;
 
 /** Prepended to every in-guest command: shims first, then user-installed tools (uv, pip --user). */
-const ENV_PREFIX = `export PATH="${BIN}:$HOME/.local/bin:$PATH" PIP_BREAK_SYSTEM_PACKAGES=1;`;
+export const ENV_PREFIX = `export PATH="${BIN}:$HOME/.local/bin:$PATH" PIP_BREAK_SYSTEM_PACKAGES=1;`;
 
 /** Find the X display when the agent's environment does not say (desktop VMs only). */
-const DISPLAY_DETECT =
+export const DISPLAY_DETECT =
   'if [ -z "$DISPLAY" ]; then for __x in /tmp/.X11-unix/X*; do [ -e "$__x" ] && export DISPLAY=":${__x##*/X}" && break; done; fi;';
 
 /**
@@ -114,6 +114,10 @@ export class SolariExecutor implements Executor {
     } catch (err) {
       log(`could not list leftover Solari VMs: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  environment(): string | null {
+    return null; // a VM is needed to probe; triage uses the documented template contents
   }
 
   box(spec: BoxSpec): Box {
@@ -266,9 +270,9 @@ export class SolariBox implements Box {
     let exposed = port;
     if (node.output.includes("yes")) {
       await h.files.write(`${ROOT}/relay.cjs`, RELAY_JS);
-      await this.exec(`(exec nohup node ${ROOT}/relay.cjs ${config.relayPort} ${port}) > ${ROOT}/relay.log 2>&1 < /dev/null &`, {
-        cwd: "/",
-        timeoutSec: 20,
+      // Detached like the app itself (not under exec()'s `timeout`).
+      await h.commands.run("sh", {
+        args: ["-c", `${ENV_PREFIX} (exec nohup node ${ROOT}/relay.cjs ${config.relayPort} ${port}) > ${ROOT}/relay.log 2>&1 < /dev/null &`],
       });
       for (let i = 0; i < 20; i++) {
         const r = await this.exec(readinessScript(config.relayPort), { cwd: "/", timeoutSec: 15 });
@@ -313,4 +317,3 @@ export class SolariBox implements Box {
   }
 }
 
-export { DISPLAY_DETECT, ENV_PREFIX };

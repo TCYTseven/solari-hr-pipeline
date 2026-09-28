@@ -33,8 +33,14 @@ export type Triage = z.infer<typeof TriageSchema>;
 /** Where the project will run; the triage prompt describes exactly that environment. */
 export type RunEnvironment = "docker" | "solari";
 
-/** What the screener's box offers, per executor. Pure. */
-export function environmentText(env: RunEnvironment): string {
+/**
+ * What the screener's box offers, per executor. `probed` is the Docker image's
+ * real tool list (see DockerExecutor.environment), which wins over the default. Pure.
+ */
+export function environmentText(env: RunEnvironment, probed?: string | null): string {
+  if (env === "docker" && probed) {
+    return `The screener runs the project inside a fresh Linux container (Debian bookworm) that has ${probed}, plus git, build-essential and curl. There is no GUI and no Docker.`;
+  }
   if (env === "docker") {
     return (
       "The screener runs the project inside a fresh Linux container (Debian bookworm) that has Node 22 with npm, " +
@@ -51,12 +57,12 @@ export function environmentText(env: RunEnvironment): string {
   );
 }
 
-function systemPrompt(env: RunEnvironment): string {
+function systemPrompt(env: RunEnvironment, probed?: string | null): string {
   return `You triage hiring-challenge submissions for Solari (cloud browsers, sandbox microVMs and desktops behind one API key). Each submission is a fork of the Solari cookbook where a candidate added a project built on Solari. You read the project and decide how an automated screener should install, run and demo it.
 
 ${UNTRUSTED_NOTICE}
 
-${environmentText(env)} Commands run with the working directory set to projectDir, as argv arrays (no shell). If you need shell features, use ["sh", "-c", "..."]. For servers the screener sets PORT and HOST=0.0.0.0 and waits for the port to answer.
+${environmentText(env, probed)} Commands run with the working directory set to projectDir, as argv arrays (no shell). If you need shell features, use ["sh", "-c", "..."]. For servers the screener sets PORT and HOST=0.0.0.0 and waits for the port to answer.
 
 Rules:
 - install: the minimum commands to install dependencies. Use ["npm", "ci"] when a package-lock.json exists, else ["npm", "install"]; for Python use ["pip", "install", "-r", "requirements.txt"] or ["pip", "install", "."]/["pip", "install", "-e", "."] for pyproject projects. Add a build step (e.g. ["npm", "run", "build"]) only if the run command needs it. Empty array if nothing to install.
@@ -177,11 +183,11 @@ export interface TriageResult {
   note?: string;
 }
 
-export async function triage(ws: Workspace, ctx: TriageContext, env: RunEnvironment): Promise<TriageResult> {
+export async function triage(ws: Workspace, ctx: TriageContext, env: RunEnvironment, probed?: string | null): Promise<TriageResult> {
   const msg = await claude().messages.parse({
     model: MODEL(),
     max_tokens: 8000,
-    system: systemPrompt(env),
+    system: systemPrompt(env, probed),
     output_config: { format: zodOutputFormat(TriageSchema), effort: "medium" },
     messages: [{ role: "user", content: buildPrompt(ws, ctx) }],
   });

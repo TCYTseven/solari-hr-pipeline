@@ -15,12 +15,12 @@ import { assertNoSharedSecrets } from "./cli";
 import { sharedSecretConflicts } from "./config";
 import { toPlaywrightKey } from "./demo/captions";
 import { isPrivateHost, shouldBlockRequest, withPreviewToken } from "./demo/netguard";
-import { DOCKER_CAPS, dockerRunArgs } from "./executors/docker";
+import { DOCKER_CAPS, describeImageProbe, dockerRunArgs } from "./executors/docker";
 import { RELAY_JS, parseReadiness, readinessScript } from "./executors/types";
 import { containedPath, readContained } from "./fsguard";
 import { parsePoll } from "./screen";
 import { buildUpdate } from "./store";
-import { heuristicTriage, normalizeTriage } from "./triage";
+import { environmentText, heuristicTriage, normalizeTriage } from "./triage";
 import { type Workspace, collectContext } from "./workspace";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "screener-sec-"));
@@ -148,6 +148,17 @@ test("docker containers run on their own network with capabilities dropped", () 
   assert.match(joined, /--pids-limit \d+/);
   assert.match(joined, /--label solari-screener=1/);
   assert.match(joined, /-p 127\.0\.0\.1::/, "the port is only published on loopback");
+});
+
+test("triage describes the Docker image as probed, including missing venv", () => {
+  const probed = describeImageProbe("node v22.22.0\npython 3.11.2\npip yes\nvenv no\nuv yes\n");
+  assert.equal(
+    probed,
+    "Node v22.22.0 with npm, Python 3.11.2 (`python` and `python3`), pip (system installs allowed, PIP_BREAK_SYSTEM_PACKAGES=1), NO python3 -m venv (install with pip directly; never create a virtualenv), uv",
+  );
+  assert.match(environmentText("docker", probed), /NO python3 -m venv/);
+  assert.match(environmentText("docker"), /python3 -m venv/, "the default describes the full image");
+  assert.match(environmentText("solari"), /documented tools are only python3, node with npm, build-essential and git/);
 });
 
 test("the demo browser blocks private hosts except the app's own origin", () => {

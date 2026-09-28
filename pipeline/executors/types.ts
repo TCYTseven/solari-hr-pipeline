@@ -67,6 +67,11 @@ export interface Executor {
   readonly kind: "docker" | "solari";
   /** Called once per scan before any box is created (e.g. build the Docker image). */
   prepare(log: (s: string) => void): Promise<void>;
+  /**
+   * What the box really offers, probed during prepare (e.g. "Node v22.x, Python 3.11.2,
+   * no venv"), for the triage prompt; null when it cannot be probed ahead of time.
+   */
+  environment(): string | null;
   /** Remove boxes a crashed screener left behind (labelled containers, tagged VMs). Never throws. */
   cleanupOrphans(log: (s: string) => void): Promise<void>;
   box(spec: BoxSpec): Box;
