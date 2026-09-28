@@ -224,3 +224,10 @@ test("pickAppPort follows the port the app really listens on", () => {
   assert.equal(pickAppPort([8000, 39999], [], [39999], "", 8000), null);
   assert.equal(pickAppPort([39999], [], [39999], "", 8000), null);
 });
+
+test("terminal thumbnails scale the font to the output", async () => {
+  const { terminalFontPx } = await import("./media");
+  assert.equal(terminalFontPx(["$ npm run sample", "wrote docs/sample-report.html"]), 30);
+  assert.equal(terminalFontPx(Array.from({ length: 24 }, () => "x".repeat(60))), 16);
+  assert.ok(terminalFontPx(["y".repeat(110)]) <= 17);
+});

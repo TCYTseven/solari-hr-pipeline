@@ -142,6 +142,18 @@ export function terminalLines(output: string, n = 24, width = 110): string[] {
   return lines.slice(-n).map((l) => (l.length > width ? `${l.slice(0, width - 1)}…` : l));
 }
 
+/**
+ * Font size for a terminal thumbnail: large for short output so a card's
+ * small preview stays readable, down to 15px for a full 24 lines, and never
+ * wider than the frame for the longest line.
+ */
+export function terminalFontPx(lines: string[]): number {
+  const byHeight = Math.floor(620 / (Math.max(lines.length, 1) * 1.6));
+  const longest = Math.max(20, ...lines.map((l) => l.length));
+  const byWidth = Math.floor(1220 / (longest * 0.62));
+  return Math.max(12, Math.min(30, byHeight, byWidth));
+}
+
 export function terminalHtml(title: string, lines: string[]): string {
   const body = lines
     .map((l) => {
@@ -149,17 +161,18 @@ export function terminalHtml(title: string, lines: string[]): string {
       return `<div class="l ${cls}">${escapeHtml(l) || "&nbsp;"}</div>`;
     })
     .join("");
+  const px = terminalFontPx(lines);
   return `<!doctype html><html><head><meta charset="utf-8"><style>
   html,body{margin:0;width:1280px;height:720px;background:#0F1514;overflow:hidden}
-  .bar{height:40px;display:flex;align-items:center;gap:8px;padding:0 20px;border-bottom:1px solid #1E2A28;color:#939599;
+  .bar{height:40px;display:flex;align-items:center;gap:8px;padding:0 20px;border-bottom:1px solid #2A3C3A;color:#939599;
     font:13px "JetBrains Mono","SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace}
-  .dot{width:11px;height:11px;border-radius:50%;background:#2A3533}
+  .dot{width:11px;height:11px;border-radius:50%;background:#2A3C3A}
   .t{margin-left:12px}
-  pre{margin:0;padding:18px 24px;color:#E7E7E2;
-    font:15px/25px "JetBrains Mono","SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace}
+  pre{margin:0;padding:${Math.round(px * 1.2)}px ${Math.round(px * 1.6)}px;color:#E7E7E2;
+    font:${px}px/1.6 "JetBrains Mono","SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace}
   .l{white-space:pre;overflow:hidden}
-  .cmd{color:#7AA2F7}
-  .err{color:#F7768E}
+  .cmd{color:#82AAFF}
+  .err{color:#FF6B5A}
 </style></head><body><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">${escapeHtml(title)}</span></div><pre>${body}</pre></body></html>`;
 }
 
