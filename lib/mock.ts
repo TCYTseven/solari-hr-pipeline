@@ -1,6 +1,6 @@
 // Mock data for building the dashboard without a database (and for demos:
 // when DATABASE_URL is unset the site runs on this). Every status appears.
-import type { Submission } from "./types";
+import type { Run, Submission } from "./types";
 
 const now = Date.now();
 const ago = (min: number) => new Date(now - min * 60_000).toISOString();
@@ -61,6 +61,8 @@ export const MOCK_SUBMISSIONS: Submission[] = [
     bootMs: 39_800,
     score: score(5, 4, 4, 5, 3),
     thumbnailUrl: "/mock/price-watch.svg",
+    summary:
+      "Price Watch is a FastAPI dashboard that keeps a list of Shopify stores and crawls them on a schedule. Each crawl fans out eight stealth Solari Browsers in parallel, and the whole thing runs from a single Solari Sandbox, which is a clean split between the service and the browsers it drives.\n\nIn the demo the agent added a store, ran a crawl that finished 40 stores in 18 seconds, and read three price changes off the diff view. The README is thin and the UI has no loading states, but the core loop works end to end and the use case maps directly to what Solari customers buy browsers for.",
     discoveredAt: ago(60 * 30),
     scannedAt: ago(12),
   }),
@@ -262,3 +264,102 @@ export const MOCK_VM_COUNTS: Record<string, number> = {
   "noor-a": 1,
   jpark: 0,
 };
+
+const PRICE_WATCH_INSTALL = `$ git clone --depth 50 https://github.com/alice-chen/solari-cookbook /work/repo
+Cloning into '/work/repo'...
+remote: Enumerating objects: 412, done.
+Receiving objects: 100% (412/412), 1.9 MiB | 11.2 MiB/s, done.
+# project: applications/price-watch
+$ python3 -m venv .venv
+$ .venv/bin/pip install -r requirements.txt
+Collecting fastapi==0.118.0
+Collecting solari-browser==0.1.5
+Collecting uvicorn[standard]==0.37.0
+Collecting psycopg[binary]==3.2.10
+Installing collected packages: typing-extensions, sniffio, idna, h11, click, anyio, uvicorn, starlette, pydantic, fastapi, solari-browser
+WARNING: Running pip as the 'root' user can result in broken permissions
+Successfully installed 38 packages in 29.8s
+$ npm --prefix web ci
+added 212 packages in 1.4s`;
+
+const PRICE_WATCH_RUN = `$ .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+INFO:     Started server process [214]
+INFO:     Waiting for application startup.
+seeding 40 demo stores from fixtures/stores.json
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+# port 8000 answered 200 after 6.2s
+INFO:     10.0.0.1:0 - "GET / HTTP/1.1" 200 OK
+INFO:     10.0.0.1:0 - "POST /stores HTTP/1.1" 201 Created
+INFO:     10.0.0.1:0 - "POST /crawl HTTP/1.1" 202 Accepted
+crawl 7f3e: launching 8 Solari browsers (stealth)
+crawl 7f3e: 40/40 stores done in 18.4s, 3 prices changed`;
+
+const PRICE_WATCH_DEMO = `# goal: add a store, run a crawl and read the price diff
+0:02 screenshot   Dashboard loaded: 40 stores, last crawl 3 min ago
+0:05 click        "+ Add store" button (1070, 101)
+0:09 type         "shopify.com/demo-sneakers"
+0:12 key          Return
+0:17 click        "Run crawl" on the new row
+0:31 wait         crawl progress 40/40
+0:38 click        "Price changes" tab
+0:46 scroll       down 3 to the diff table
+0:55 finish       Added a store, ran a crawl, 3 price changes shown with old and new prices`;
+
+export const MOCK_RUNS: Record<string, Run> = {
+  "alice-chen": {
+    id: "run_7f3e2a",
+    owner: "alice-chen",
+    commitSha: "3f2a91c8d1e04b7a9c2f",
+    status: "booted",
+    startedAt: ago(14),
+    finishedAt: ago(12),
+    timings: [
+      { surface: "Sandbox", create: 88, clone: 2_100, install: 31_400, boot: 6_200, demo: null, release: 3 },
+      { surface: "Browser", create: 0.8, clone: null, install: null, boot: 1_100, demo: 60_000, release: 2 },
+    ],
+    logs: { install: PRICE_WATCH_INSTALL, run: PRICE_WATCH_RUN, demo: PRICE_WATCH_DEMO },
+    steps: [
+      { t: 2, action: "screenshot", label: "Opened the dashboard", reasoning: "Start by looking at what the app shows on load: 40 seeded stores and the time of the last crawl." },
+      { t: 5, action: "click", label: "Clicked Add store", reasoning: "Adding a store is the main write path, so it is the first thing a user would try." },
+      { t: 9, action: "type", label: "Typed shopify.com/demo-sneakers", reasoning: "Use a store URL the fixtures don't already contain, to prove the form actually persists." },
+      { t: 12, action: "key", label: "Pressed Enter", reasoning: "Submit the form the way a keyboard user would." },
+      { t: 17, action: "click", label: "Clicked Run crawl", reasoning: "The crawl is the feature that uses Solari: it fans out stealth browsers across stores." },
+      { t: 31, action: "wait", label: "Waited for the crawl", reasoning: "The progress bar reached 40/40, so the parallel browsers all returned." },
+      { t: 38, action: "click", label: "Opened Price changes", reasoning: "The diff view is the payoff; check it shows the three changed prices from the run log." },
+      { t: 46, action: "scroll", label: "Scrolled to the diff table", reasoning: "Old and new prices are below the fold." },
+      { t: 55, action: "done", label: "Finished the demo", reasoning: "Added a store, ran a crawl, and saw three price changes with old and new values." },
+    ],
+    streamUrl: null,
+    vmCount: 9,
+    failureReason: null,
+  },
+};
+
+/** A minimal run for mock submissions without a hand-written one. */
+export function mockRunFor(s: Submission): Run | null {
+  if (MOCK_RUNS[s.owner]) return MOCK_RUNS[s.owner];
+  if (s.status === "queued") return null;
+  const failed = s.status === "build_failed" || s.status === "timeout";
+  return {
+    id: `run_${s.forkNumber}`,
+    owner: s.owner,
+    commitSha: s.commitSha,
+    status: s.status,
+    startedAt: s.scannedAt ?? s.discoveredAt,
+    finishedAt: s.status === "running" ? null : s.scannedAt,
+    timings:
+      s.status === "skipped"
+        ? []
+        : [{ surface: "Sandbox", create: 92, clone: 1_800, install: failed ? 24_600 : 18_200, boot: failed ? null : 4_100, demo: null, release: 3 }],
+    logs: {
+      install: `$ git clone --depth 50 ${s.repoUrl} /work/repo\nCloning into '/work/repo'...\n${s.status === "build_failed" ? (s.errorTail ?? []).join("\n") : "# install finished"}`,
+      run: s.status === "timeout" || s.status === "needs_secrets" ? (s.errorTail ?? []).join("\n") : "",
+      demo: "",
+    },
+    steps: [],
+    streamUrl: null,
+    vmCount: MOCK_VM_COUNTS[s.owner] ?? 0,
+    failureReason: s.status === "build_failed" ? "Dependency install failed" : s.status === "timeout" ? "Timed out" : null,
+  };
+}

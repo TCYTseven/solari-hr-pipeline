@@ -11,12 +11,12 @@ export function formatDuration(ms: number | null | undefined): string {
   return rem ? `${m}m ${rem}s` : `${m}m`;
 }
 
-/** Same as formatDuration but keeps one decimal between 1s and 60s, for tables. */
+/** Same as formatDuration but keeps one decimal between 1s and 2m, for tables. */
 export function formatStage(ms: number | null | undefined): string {
   if (ms == null) return "-";
   if (ms < 10) return `${Number(ms.toFixed(1))}ms`;
   if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 120_000) return `${(ms / 1000).toFixed(1)}s`;
   return formatDuration(ms);
 }
 

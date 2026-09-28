@@ -1,7 +1,7 @@
 // Data access for the dashboard. Pages only talk to this module.
-import { MOCK_SCAN, MOCK_SUBMISSIONS, MOCK_VM_COUNTS } from "./mock";
+import { MOCK_SCAN, MOCK_SUBMISSIONS, MOCK_VM_COUNTS, mockRunFor } from "./mock";
 import { median } from "./metrics";
-import type { ScanInfo, Submission } from "./types";
+import type { Run, ScanInfo, Submission } from "./types";
 
 export interface Overview {
   forksFound: number;
@@ -27,4 +27,11 @@ export async function getOverview(): Promise<Overview> {
     vmsLaunched: Object.values(MOCK_VM_COUNTS).reduce((a, b) => a + b, 0),
     medianBootMs: median(booted.map((s) => s.bootMs).filter((n): n is number => n != null)),
   };
+}
+
+export async function getSubmission(owner: string): Promise<{ submission: Submission; run: Run | null } | null> {
+  const key = owner.toLowerCase();
+  const submission = MOCK_SUBMISSIONS.find((s) => s.owner.toLowerCase() === key && !s.hidden);
+  if (!submission) return null;
+  return { submission, run: mockRunFor(submission) };
 }
