@@ -1,0 +1,280 @@
+// Local fallback executor: one Docker container per submission, on its own
+// network, with every capability dropped except the few installs need.
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { config } from "../config";
+import { launchLocalChromium } from "../media";
+import { mustRun, onCleanup, runProc, shellQuoteArg, sleep } from "../util";
+import { type Box, type BoxSpec, type ExecOptions, type ExecResult, type Executor, RELAY_JS, parseReadiness, readinessScript } from "./types";
+
+const DOCKERFILE = path.join(config.root, "pipeline", "docker", "Dockerfile");
+
+/** Label on every container and network the screener creates (orphan cleanup finds them by it). */
+export const DOCKER_LABEL = "solari-screener=1";
+
+/**
+ * Capabilities kept after `--cap-drop ALL`: enough for npm/pip/apt-style installs
+ * (chown, file ownership, setuid for package scripts), nothing that reaches the host
+ * or the network stack.
+ */
+export const DOCKER_CAPS = ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID"];
+
+/** Turn the image probe's "key value" lines into a sentence for the triage prompt. Pure. */
+export function describeImageProbe(out: string): string {
+  const v = Object.fromEntries(
+    out
+      .split("\n")
+      .map((l) => l.trim().split(/\s+/))
+      .filter((p) => p.length >= 2)
+      .map(([k, ...rest]) => [k!, rest.join(" ")]),
+  ) as Record<string, string>;
+  const parts = [
+    `Node ${v.node ?? "?"} with npm`,
+    `Python ${v.python ?? "?"} (\`python\` and \`python3\`)`,
+    v.pip === "yes" ? "pip (system installs allowed, PIP_BREAK_SYSTEM_PACKAGES=1)" : "NO pip",
+    v.venv === "yes" ? "python3 -m venv" : "NO python3 -m venv (install with pip directly; never create a virtualenv)",
+    v.uv === "yes" ? "uv" : "no uv",
+  ];
+  return parts.join(", ");
+}
+
+/** `docker run` arguments for one submission container. Pure. */
+export function dockerRunArgs(o: { name: string; network: string; owner: string; runId: string; envFile: string }): string[] {
+  return [
+    "run", "-d", "--name", o.name,
+    "--label", DOCKER_LABEL, "--label", `screener.owner=${o.owner}`, "--label", `screener.run=${o.runId}`,
+    "--network", o.network,
+    "--cpus", config.dockerCpus, "--memory", config.dockerMemory, "--pids-limit", "1024",
+    "--cap-drop", "ALL", ...DOCKER_CAPS.flatMap((c) => ["--cap-add", c]),
+    "--security-opt", "no-new-privileges",
+    // Point Docker Desktop's host aliases at the container itself, so a submission
+    // cannot reach services on the screener's machine by name.
+    "--add-host", "host.docker.internal:127.0.0.1",
+    "--add-host", "gateway.docker.internal:127.0.0.1",
+    "-p", `127.0.0.1::${config.relayPort}`,
+    "--env-file", o.envFile,
+    config.dockerImage, "sleep", "infinity",
+  ];
+}
+
+function contextHash(caPem: string | null): string {
+  const h = crypto.createHash("sha256");
+  h.update(fs.readFileSync(DOCKERFILE));
+  h.update(RELAY_JS);
+  if (caPem) h.update(caPem);
+  return h.digest("hex").slice(0, 16);
+}
+
+export class DockerExecutor implements Executor {
+  readonly kind = "docker" as const;
+  private ready: Promise<void> | null = null;
+  private env: string | null = null;
+
+  environment(): string | null {
+    return this.env;
+  }
+
+  prepare(log: (s: string) => void): Promise<void> {
+    this.ready ??= (async () => {
+      await this.ensureImage(log);
+      this.env = await this.probeImage();
+      if (this.env) log(`sandbox image: ${this.env}`);
+      // Local demos need local Chromium: fail the scan now, not once per fork.
+      const browser = await launchLocalChromium();
+      await browser.close();
+    })().catch((err) => {
+      this.ready = null;
+      throw err;
+    });
+    return this.ready;
+  }
+
+  /** One throwaway container, no network: which tools the image really has. */
+  private async probeImage(): Promise<string | null> {
+    const script = [
+      'echo "node $(node --version 2>/dev/null || echo none)"',
+      'echo "python $(python3 --version 2>&1 | cut -d" " -f2)"',
+      'python3 -m pip --version >/dev/null 2>&1 && echo "pip yes" || echo "pip no"',
+      'python3 -c "import ensurepip" >/dev/null 2>&1 && echo "venv yes" || echo "venv no"',
+      'command -v uv >/dev/null 2>&1 && echo "uv yes" || echo "uv no"',
+    ].join("; ");
+    const r = await runProc("docker", ["run", "--rm", "--network", "none", "--label", DOCKER_LABEL, config.dockerImage, "sh", "-c", script], { timeoutMs: 60_000 });
+    return r.code === 0 ? describeImageProbe(r.stdout) : null;
+  }
+
+  async cleanupOrphans(log: (s: string) => void): Promise<void> {
+    const ps = await runProc("docker", ["ps", "-aq", "--filter", `label=${DOCKER_LABEL}`], { timeoutMs: 30_000 });
+    const ids = ps.code === 0 ? ps.stdout.split(/\s+/).filter(Boolean) : [];
+    if (ids.length) {
+      await runProc("docker", ["rm", "-f", ...ids], { timeoutMs: 120_000 });
+      log(`removed ${ids.length} leftover screener container(s)`);
+    }
+    const nets = await runProc("docker", ["network", "ls", "-q", "--filter", `label=${DOCKER_LABEL}`], { timeoutMs: 30_000 });
+    const netIds = nets.code === 0 ? nets.stdout.split(/\s+/).filter(Boolean) : [];
+    if (netIds.length) {
+      await runProc("docker", ["network", "rm", ...netIds], { timeoutMs: 60_000 });
+      log(`removed ${netIds.length} leftover screener network(s)`);
+    }
+  }
+
+  private async ensureImage(log: (s: string) => void): Promise<void> {
+    const ping = await runProc("docker", ["version", "--format", "{{.Server.Version}}"], { timeoutMs: 20_000 });
+    if (ping.code !== 0) throw new Error(`Docker is not available: ${ping.output.trim().split("\n").pop()}`);
+
+    const caPath = process.env.SCREENER_DOCKER_CA_CERT?.trim();
+    const caPem = caPath ? fs.readFileSync(caPath, "utf8") : null;
+    const hash = contextHash(caPem);
+    const inspect = await runProc("docker", ["image", "inspect", "--format", '{{index .Config.Labels "screener.hash"}}', config.dockerImage]);
+    if (inspect.code === 0 && inspect.stdout.trim() === hash) return;
+
+    log(`Building ${config.dockerImage} (first use or Dockerfile changed)...`);
+    const ctx = fs.mkdtempSync(path.join(os.tmpdir(), "screener-image-"));
+    try {
+      fs.copyFileSync(DOCKERFILE, path.join(ctx, "Dockerfile"));
+      fs.writeFileSync(path.join(ctx, "relay.cjs"), RELAY_JS);
+      fs.mkdirSync(path.join(ctx, "ca"));
+      if (caPem) fs.writeFileSync(path.join(ctx, "ca", "extra.crt"), caPem);
+      else fs.writeFileSync(path.join(ctx, "ca", ".keep"), "");
+      const r = await runProc("docker", ["build", "--label", `screener.hash=${hash}`, "-t", config.dockerImage, ctx], {
+        timeoutMs: 1_800_000,
+      });
+      if (r.code !== 0) throw new Error(`docker build failed:\n${r.output.split("\n").slice(-15).join("\n")}`);
+      log(`Built ${config.dockerImage}.`);
+    } finally {
+      fs.rmSync(ctx, { recursive: true, force: true });
+    }
+  }
+
+  box(spec: BoxSpec): Box {
+    return new DockerBox(spec);
+  }
+}
+
+class DockerBox implements Box {
+  readonly surface = "Local sandbox" as const;
+  readonly kind = "sandbox" as const;
+  readonly repoPath = "/work/repo";
+  readonly relayPort = config.relayPort;
+  readonly vmCount = 0;
+  description = "";
+  private id: string | null = null;
+  private network: string | null = null;
+  private hostPort: number | null = null;
+  private unregister: (() => void) | null = null;
+  private readonly name: string;
+
+  constructor(private spec: BoxSpec) {
+    this.name = `screener-${spec.owner.toLowerCase().replace(/[^a-z0-9_.-]/g, "-")}-${spec.runId.slice(0, 8)}`;
+  }
+
+  vmSeconds(): number {
+    return 0;
+  }
+
+  async create(): Promise<void> {
+    this.unregister = onCleanup(() => this.release());
+    // A network of its own: no other submission (or compose service) is reachable by name or IP.
+    await mustRun("docker", ["network", "create", "--driver", "bridge", "--label", DOCKER_LABEL, "--label", `screener.run=${this.spec.runId}`, this.name], {
+      timeoutMs: 60_000,
+    });
+    this.network = this.name;
+    // Pass env through a 0600 file so values never show up in `ps`.
+    const envFile = path.join(os.tmpdir(), `${this.name}.env`);
+    const lines = Object.entries(this.spec.env)
+      .filter(([, v]) => !/[\r\n]/.test(v))
+      .map(([k, v]) => `${k}=${v}`);
+    fs.writeFileSync(envFile, lines.join("\n") + "\n", { mode: 0o600 });
+    const args = dockerRunArgs({ name: this.name, network: this.network, owner: this.spec.owner, runId: this.spec.runId, envFile });
+    try {
+      const r = await mustRun("docker", args, { timeoutMs: 120_000 });
+      this.id = r.stdout.trim().split("\n").pop()!.slice(0, 12);
+    } finally {
+      fs.rmSync(envFile, { force: true });
+    }
+    const port = await mustRun("docker", ["port", this.id, `${config.relayPort}/tcp`], { timeoutMs: 30_000 });
+    const m = /:(\d+)\s*$/m.exec(port.stdout.trim().split("\n")[0] ?? "");
+    if (!m) throw new Error(`could not read published port: ${port.stdout}`);
+    this.hostPort = Number(m[1]);
+    this.description = `docker run --network ${this.name} --cap-drop ALL --cpus ${config.dockerCpus} --memory ${config.dockerMemory} ${config.dockerImage}  (container ${this.id})`;
+  }
+
+  async clone(input: { tar: Buffer; sourceUrl: string | null; sha: string }, log: (s: string) => void): Promise<ExecResult> {
+    const id = this.need();
+    // Unpack inside the container, not with `docker cp`: the daemon rejects archives whose
+    // symlinks point outside (a candidate's repo may have one), and inside the box such a
+    // link can only reach the container's own filesystem. GNU tar refuses ../ members.
+    log(`$ git archive ${input.sha.slice(0, 12)} | docker exec -i ${id} tar -x -C /work\n`);
+    const r = await runProc("docker", ["exec", "-i", id, "sh", "-c", "mkdir -p /work && tar -xf - -C /work --no-same-owner"], {
+      input: input.tar,
+      timeoutMs: 300_000,
+    });
+    const out = r.output.trim();
+    const summary = r.code === 0 ? `Copied ${(input.tar.length / 1024).toFixed(0)} kB into ${this.repoPath}\n` : `${out}\n`;
+    log(summary);
+    return { exitCode: r.code, output: summary, timedOut: r.timedOut };
+  }
+
+  private dir(cwd?: string): string {
+    if (cwd === "/") return "/";
+    return !cwd || cwd === "." ? this.repoPath : path.posix.join(this.repoPath, cwd);
+  }
+
+  async exec(script: string, opts: ExecOptions): Promise<ExecResult> {
+    const id = this.need();
+    const t0 = Date.now();
+    const r = await runProc(
+      "docker",
+      ["exec", "-w", this.dir(opts.cwd), id, "timeout", "-k", "5", String(opts.timeoutSec), "sh", "-c", script],
+      { timeoutMs: (opts.timeoutSec + 30) * 1000, onData: opts.onOutput },
+    );
+    // `timeout` exits 124 (or 137 when it had to SIGKILL) once the limit is hit.
+    const hitLimit = Date.now() - t0 >= opts.timeoutSec * 1000 - 500;
+    const timedOut = r.timedOut || (hitLimit && (r.code === 124 || r.code === 137));
+    return { exitCode: r.code, output: r.output, timedOut };
+  }
+
+  async startBackground(script: string, opts: { cwd?: string; logFile: string; pidFile: string }): Promise<void> {
+    const id = this.need();
+    // $0 carries the user script so it needs no nested quoting.
+    const wrapper = `echo $$ > ${shellQuoteArg(opts.pidFile)}; exec sh -c "$0" > ${shellQuoteArg(opts.logFile)} 2>&1 < /dev/null`;
+    await mustRun("docker", ["exec", "-d", "-w", this.dir(opts.cwd), id, "sh", "-c", wrapper, script], { timeoutMs: 30_000 });
+  }
+
+  async exposePort(port: number): Promise<string> {
+    const id = this.need();
+    await mustRun("docker", ["exec", "-d", id, "node", "/opt/screener/relay.cjs", String(config.relayPort), String(port)], {
+      timeoutMs: 30_000,
+    });
+    // `exec -d` returns before the relay listens: wait until it answers.
+    for (let i = 0; i < 20; i++) {
+      const r = await this.exec(readinessScript(config.relayPort), { cwd: "/", timeoutSec: 15 });
+      if (parseReadiness(r.output).up) break;
+      await sleep(250);
+    }
+    return `http://127.0.0.1:${this.hostPort}/`;
+  }
+
+  async release(): Promise<void> {
+    const id = this.id;
+    const network = this.network;
+    this.id = null;
+    this.network = null;
+    this.unregister?.();
+    this.unregister = null;
+    if (id) {
+      const r = await runProc("docker", ["rm", "-f", id], { timeoutMs: 60_000 });
+      if (r.code !== 0) console.warn(`[docker] failed to remove ${id}: ${r.output.trim()}`);
+    }
+    if (network) {
+      const r = await runProc("docker", ["network", "rm", network], { timeoutMs: 60_000 });
+      if (r.code !== 0) console.warn(`[docker] failed to remove network ${network}: ${r.output.trim()}`);
+    }
+  }
+
+  private need(): string {
+    if (!this.id) throw new Error("container not created");
+    return this.id;
+  }
+}

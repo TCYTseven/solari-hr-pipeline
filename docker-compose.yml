@@ -1,0 +1,25 @@
+# Local Postgres for the screener: `docker compose up -d`
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: screener
+      # `npm run setup` writes a random POSTGRES_PASSWORD to .env; Compose reads it from there.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-screener}
+      POSTGRES_DB: solari_screener
+    ports:
+      # Loopback only: nothing else on the network (or a submission on it) can reach it.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Applied on first start; `npm run db:migrate` re-applies it any time.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U screener -d solari_screener"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

@@ -1,11 +1,35 @@
-node_modules/
-package-lock.json
-.env
-.dev.vars
-.wrangler/
-__pycache__/
-*.pyc
-.venv/
-venv/
-screenshot.png
-screenshots/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env files (only the example is committed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# screener runtime output (clones, recordings, screenshots)
+/.screener/
+/public/media/
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# agent worktrees
+/.claude/

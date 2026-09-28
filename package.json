@@ -1,0 +1,54 @@
+{
+  "name": "solari-screener",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Every Solari submission, booted and demoed.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "setup": "node --import tsx scripts/setup.mts",
+    "scan": "tsx --env-file-if-exists=.env pipeline/cli.ts scan",
+    "scan:watch": "tsx --env-file-if-exists=.env pipeline/cli.ts watch",
+    "solari:check": "tsx --env-file-if-exists=.env pipeline/solari-check.ts",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/db.mts migrate",
+    "db:seed": "node --env-file-if-exists=.env --import tsx scripts/db.mts seed",
+    "db:reset": "node --env-file-if-exists=.env --import tsx scripts/db.mts reset",
+    "db:restore": "node --env-file-if-exists=.env --import tsx scripts/db.mts restore",
+    "sdk-issue": "node --env-file-if-exists=.env --import tsx scripts/sdk-issue.mts",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:pipeline": "tsx --test \"pipeline/**/*.test.ts\"",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@solarisdk/browser": "^0.1.5",
+    "@solarisdk/sdk": "^0.1.4",
+    "next": "16.3.6",
+    "pg": "^8.23.0",
+    "playwright": "^1.63.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "simple-icons": "^16.33.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.9.0"
+  }
+}

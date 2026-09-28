@@ -1,0 +1,132 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* Solari tokens (docs/steps.md, Section 1). Components read these directly. */
+:root {
+  --bg: #080A0E;
+  --bg-raised: #0B0D10;
+  --surface: #17171D;
+  --surface-teal: #0F1514;
+  --surface-teal-2: #151E1D;
+  --line-teal: #2A3C3A;
+  --accent: #F5B301;
+  --accent-soft: #F5C66A;
+  --blue: #0099FF;
+  --text: #FFFFFF;
+  --text-body: #E7E7E2;
+  --text-muted: #939599;
+  --text-faint: #636363;
+  --border: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.16);
+  --glass: rgba(8,10,14,0.82);
+
+  --ok: #9BD89A;
+  --run: #0099FF;
+  --fail: #FF6B5A;
+  --warn: #F5C66A;
+  --skip: #636363;
+
+  /* The --font-inter* variables come from next/font (app/fonts.ts). */
+  --font-display: "Inter Display", var(--font-inter), var(--font-inter-tight), Inter, system-ui, sans-serif;
+  --font-body: var(--font-inter), Inter, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+
+  --r-card: 10px;
+  --r-btn: 6px;
+  --r-badge: 4px;
+
+  /* Code syntax colors from their code sample block, used for build logs. */
+  --syn-keyword: #C792EA;
+  --syn-fn: #82AAFF;
+  --syn-string: #9BD89A;
+  --syn-number: #F5C66A;
+  --syn-plain: #E7E7E2;
+  --syn-comment: #939599;
+
+  color-scheme: dark;
+}
+
+/* Element defaults live in the base layer so Tailwind utilities override them. */
+@layer base {
+  html {
+    background: var(--bg);
+    /* Keeps focused and anchored content clear of the 56px sticky nav. */
+    scroll-padding-top: 72px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-body);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
+  }
+
+  @media (min-width: 810px) {
+    body {
+      font-size: 15px;
+    }
+  }
+
+  ::selection {
+    background: rgba(245, 179, 1, 0.35);
+    color: var(--text);
+  }
+
+  /* Visible focus ring: 2px accent outline, 2px offset. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Numbers, labels and logs in JetBrains Mono sit at 0 tracking unless a
+     utility says otherwise (labels use tracking-[0.04em]). */
+  .font-mono {
+    letter-spacing: 0;
+  }
+}
+
+/* Motion (docs/steps.md, Section 5). Quiet by design. */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.live-pulse {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in {
+  animation: fade-in 200ms ease-out both;
+}
+
+/* Count-up numbers wait for JS (see ui/CountUp.tsx). If hydration never
+   happens, they reveal themselves after 2s. Without JS, .js is never set. */
+@keyframes count-reveal {
+  to { visibility: visible; }
+}
+.js .count-pending {
+  visibility: hidden;
+  animation: count-reveal 0s 2s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse,
+  .fade-in {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

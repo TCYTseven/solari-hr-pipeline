@@ -1,0 +1,129 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import type { ScanInfo } from "@/lib/types";
+import { buttonClass } from "./Button";
+import { ScanStatus } from "./ScanStatus";
+import { cx } from "./cx";
+
+const LINKS = [
+  { href: "/", label: "Submissions", match: (p: string) => p === "/" || p.startsWith("/s/") },
+  { href: "/stats", label: "Stats", match: (p: string) => p.startsWith("/stats") },
+  { href: "/how", label: "How it works", match: (p: string) => p.startsWith("/how") },
+];
+
+/** Sticky glass nav: translucent background, 12px backdrop blur, 1px bottom border. */
+export function Nav({ scan }: { scan: ScanInfo }) {
+  const pathname = usePathname();
+  // The menu is open for one pathname; navigating closes it without an effect.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const toggle = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setOpenOn(null);
+      toggle.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <header
+      className="sticky top-0 z-40 border-b border-line"
+      style={{ background: "var(--glass)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+    >
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-btn focus:bg-accent focus:px-3 focus:py-2 focus:text-bg"
+      >
+        Skip to content
+      </a>
+      <nav aria-label="Main" className="mx-auto flex h-14 w-full max-w-content items-center gap-8 px-4 md:px-8">
+        <Link href="/" className="font-display text-[17px] font-semibold tracking-[-0.02em] text-ink">
+          Solari Screener
+        </Link>
+
+        <ul className="hidden items-center gap-1 md:flex">
+          {LINKS.map((l) => {
+            const active = l.match(pathname);
+            return (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cx(
+                    "rounded-btn px-3 py-1.5 text-sm transition-colors duration-150",
+                    active ? "bg-white/[0.06] text-ink" : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="ml-auto hidden items-center gap-5 md:flex">
+          <ScanStatus scan={scan} />
+          <Link
+            href="/optout"
+            aria-current={pathname.startsWith("/optout") ? "page" : undefined}
+            className={buttonClass("ghost", undefined, "sm")}
+          >
+            Opt out
+          </Link>
+        </div>
+
+        <button
+          ref={toggle}
+          type="button"
+          className="ml-auto grid size-9 place-items-center rounded-btn border border-line-strong text-ink md:hidden"
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+          aria-label={open ? "Close menu" : "Open menu"}
+          onClick={() => setOpenOn(open ? null : pathname)}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+            {open ? (
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" />
+            ) : (
+              <path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" strokeWidth="1.5" />
+            )}
+          </svg>
+        </button>
+      </nav>
+
+      {open && (
+        <div id="mobile-menu" className="border-t border-line md:hidden">
+          <ul className="mx-auto flex max-w-content flex-col px-4 py-2">
+            {[...LINKS, { href: "/optout", label: "Opt out", match: (p: string) => p.startsWith("/optout") }].map(
+              (l) => {
+                const active = l.match(pathname);
+                return (
+                  <li key={l.href}>
+                    <Link
+                      href={l.href}
+                      aria-current={active ? "page" : undefined}
+                      className={cx("block py-3 text-[15px]", active ? "text-ink" : "text-ink-muted")}
+                    >
+                      {l.label}
+                    </Link>
+                  </li>
+                );
+              },
+            )}
+            <li className="border-t border-line py-3">
+              <ScanStatus scan={scan} />
+            </li>
+          </ul>
+        </div>
+      )}
+    </header>
+  );
+}
