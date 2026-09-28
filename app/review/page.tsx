@@ -7,12 +7,6 @@ import { Container } from "@/ui/Container";
 import { Label } from "@/ui/Label";
 import { LiveRefresh } from "@/ui/LiveRefresh";
 
-export const metadata: Metadata = {
-  title: "Review",
-  robots: { index: false, follow: false, nocache: true },
-  // The key is in the URL; don't hand it to other sites in the Referer header.
-  referrer: "no-referrer",
-};
 
 function keyMatches(given: string | undefined): boolean {
   const expected = process.env.REVIEW_KEY;
@@ -20,6 +14,18 @@ function keyMatches(given: string | undefined): boolean {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export async function generateMetadata({ searchParams }: PageProps<"/review">): Promise<Metadata> {
+  const sp = await searchParams;
+  const key = Array.isArray(sp.key) ? sp.key[0] : sp.key;
+  return {
+    // Same title as any other 404 when the key is wrong.
+    title: keyMatches(key) ? "Review" : "Not found",
+    robots: { index: false, follow: false, nocache: true },
+    // The key is in the URL; don't hand it to other sites in the Referer header.
+    referrer: "no-referrer",
+  };
 }
 
 export default async function ReviewPage({ searchParams }: PageProps<"/review">) {

@@ -14,10 +14,10 @@ export const metadata: Metadata = {
   description: "Boot times, product usage, build failures and SDK issues across every screened submission.",
 };
 
-const ISSUE_STATE: Record<SdkIssue["state"], { label: string; color: string }> = {
-  open: { label: "Open", color: "var(--ok)" },
-  merged: { label: "Merged", color: "var(--syn-keyword)" },
-  closed: { label: "Closed", color: "var(--skip)" },
+const ISSUE_STATE: Record<SdkIssue["state"], { label: string; color: string; text: string }> = {
+  open: { label: "Open", color: "var(--ok)", text: "var(--ok)" },
+  merged: { label: "Merged", color: "var(--syn-keyword)", text: "var(--syn-keyword)" },
+  closed: { label: "Closed", color: "var(--skip)", text: "var(--text-muted)" },
 };
 
 function Section({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
@@ -91,7 +91,7 @@ export default async function StatsPage() {
 
       <Divider className="my-14 md:my-16" />
 
-      <div className="grid gap-16 lg:grid-cols-2 lg:gap-12">
+      <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-12">
         <Section id="boot-title" title="Median boot time by project type" sub="Create, clone, install and boot, for runs that booted. Fastest in amber.">
           <BarChart
             rows={bootRows}
@@ -114,7 +114,7 @@ export default async function StatsPage() {
 
       <Divider className="my-14 md:my-16" />
 
-      <div className="grid gap-16 lg:grid-cols-2 lg:gap-12">
+      <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-12">
         <Section id="failures-title" title="Most common build failures" sub="The failure category of each submission that did not boot.">
           {stats.failures.length ? (
             <div className="overflow-x-auto rounded-card border border-line">
@@ -159,7 +159,7 @@ export default async function StatsPage() {
                   </a>
                   <span
                     className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] font-semibold uppercase leading-4 tracking-[0.04em]"
-                    style={{ color: ISSUE_STATE[i.state].color }}
+                    style={{ color: ISSUE_STATE[i.state].text }}
                   >
                     <span aria-hidden className="size-1.5 rounded-full" style={{ background: ISSUE_STATE[i.state].color }} />
                     {ISSUE_STATE[i.state].label}

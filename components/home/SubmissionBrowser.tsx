@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { topScoreThreshold } from "@/lib/metrics";
 import type { Submission } from "@/lib/types";
 import { Container } from "@/ui/Container";
@@ -48,6 +48,7 @@ export function SubmissionBrowser({
   initial: BrowserState;
 }) {
   const [state, setState] = useState(initial);
+  const search = useRef<HTMLInputElement>(null);
   const visible = useMemo(() => applyFilters(submissions, state), [submissions, state]);
   const threshold = useMemo(() => topScoreThreshold(submissions), [submissions]);
 
@@ -64,11 +65,19 @@ export function SubmissionBrowser({
     <Container className="pb-16 pt-10 md:pb-24">
       <h2 className="sr-only">Submissions</h2>
       <div className="flex flex-col gap-5 border-b border-line lg:flex-row lg:items-end lg:justify-between">
-        <Tabs label="Filter by Solari product" items={TABS} value={state.tab} onChange={(tab) => update({ tab })} />
+        <Tabs
+          label="Filter by Solari product"
+          items={TABS}
+          value={state.tab}
+          onChange={(tab) => update({ tab })}
+          idPrefix="filter"
+          panelId="submission-results"
+        />
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pb-3">
           <label className="relative block w-full sm:w-64">
             <span className="sr-only">Search submissions</span>
             <input
+              ref={search}
               type="search"
               value={state.q}
               onChange={(e) => update({ q: e.target.value })}
@@ -111,6 +120,7 @@ export function SubmissionBrowser({
         {visible.length} submission{visible.length === 1 ? "" : "s"} shown
       </p>
 
+      <div id="submission-results" role="tabpanel" aria-labelledby={`filter-tab-${state.tab}`}>
       {visible.length > 0 ? (
         <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {visible.map((s) => (
@@ -125,11 +135,20 @@ export function SubmissionBrowser({
       ) : (
         <p className="mt-16 text-center text-ink-muted">
           No submissions match these filters.{" "}
-          <button type="button" onClick={() => update(DEFAULT_STATE)} className="text-blue hover:underline">
+          <button
+            type="button"
+            onClick={() => {
+              update(DEFAULT_STATE);
+              // The button unmounts with the empty state; keep focus somewhere useful.
+              requestAnimationFrame(() => search.current?.focus());
+            }}
+            className="text-blue hover:underline"
+          >
             Clear filters
           </button>
         </p>
       )}
+      </div>
     </Container>
   );
 }

@@ -4,8 +4,9 @@ import { Pool } from "pg";
 // One pool per server process. Cached on globalThis so dev hot reloads reuse it.
 const globalForPg = globalThis as unknown as { __screenerPool?: Pool };
 
+/** SCREENER_DATA=mock forces the mock set even when DATABASE_URL is set (tests, demos). */
 export function hasDatabase(): boolean {
-  return !!process.env.DATABASE_URL;
+  return !!process.env.DATABASE_URL && process.env.SCREENER_DATA !== "mock";
 }
 
 export function db(): Pool {

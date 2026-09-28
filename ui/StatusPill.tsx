@@ -12,14 +12,14 @@ export function StatusPill({
   pulse?: boolean;
   className?: string;
 }) {
-  const { label, color } = STATUS[status];
+  const { label, color, text } = STATUS[status];
   return (
     <span
       className={cx(
         "inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase leading-none tracking-[0.04em]",
         className,
       )}
-      style={{ color }}
+      style={{ color: text }}
     >
       <span
         aria-hidden

@@ -19,9 +19,9 @@ export function LogTabs({ logs }: { logs: Record<LogTab, string> }) {
   return (
     <div>
       <div className="border-b border-line">
-        <Tabs label="Logs" items={ITEMS} value={tab} onChange={setTab} idPrefix="logs" />
+        <Tabs label="Logs" items={ITEMS} value={tab} onChange={setTab} idPrefix="logs" panelId="logs-panel" />
       </div>
-      <div role="tabpanel" id={`logs-panel-${tab}`} aria-labelledby={`logs-tab-${tab}`} className="mt-4">
+      <div role="tabpanel" id="logs-panel" aria-labelledby={`logs-tab-${tab}`} className="mt-4">
         {text ? (
           <LogBlock text={text} maxHeight={520} label={`${tab} log`} />
         ) : (

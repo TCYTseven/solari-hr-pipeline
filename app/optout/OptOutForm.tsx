@@ -1,15 +1,20 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { Button } from "@/ui/Button";
 import { removeSubmission, type OptOutState } from "./actions";
 
 export function OptOutForm() {
   const [state, action, pending] = useActionState<OptOutState, FormData>(removeSubmission, { status: "idle" });
+  const done = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (state.status === "done") done.current?.focus();
+  }, [state.status]);
 
   if (state.status === "done") {
     return (
-      <p role="status" className="mt-10 flex items-center gap-2 text-base text-ink">
+      <p ref={done} tabIndex={-1} role="status" className="mt-10 flex items-center gap-2 text-base text-ink">
         <span aria-hidden className="size-1.5 rounded-full bg-ok" />
         Removed. Your submission is hidden from the dashboard.
       </p>
@@ -17,7 +22,17 @@ export function OptOutForm() {
   }
 
   return (
-    <form action={action} className="mt-10 flex max-w-lg flex-col gap-3">
+    <form
+      // Works without JS through the action; with JS, submit in a transition so
+      // React doesn't reset the field and lose what was typed.
+      action={action}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="mt-10 flex max-w-lg flex-col gap-3"
+    >
       <label htmlFor="username" className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
         GitHub username
       </label>
@@ -26,6 +41,7 @@ export function OptOutForm() {
           id="username"
           name="username"
           required
+          defaultValue={state.value}
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}

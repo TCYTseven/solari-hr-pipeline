@@ -32,6 +32,24 @@ function LiveView({ src, title }: { src: string; title: string }) {
   );
 }
 
+const DOT = 24; // px: minimum target size and spacing (WCAG 2.5.8)
+
+/**
+ * Dot centers as a % of the track. Proportional to time, but nudged so no two
+ * are closer than DOT px (when the track is wide enough for that at all).
+ */
+function layoutDots(times: number[], duration: number, width: number): number[] {
+  if (width <= 0 || times.length * DOT > width) return times.map((t) => Math.min(100, (t / duration) * 100));
+  const half = DOT / 2;
+  const x = times.map((t) => Math.min(width - half, Math.max(half, (t / duration) * width)));
+  for (let i = 1; i < x.length; i++) x[i] = Math.max(x[i], x[i - 1] + DOT);
+  for (let i = x.length - 1; i >= 0; i--) {
+    const limit = i === x.length - 1 ? width - half : x[i + 1] - DOT;
+    x[i] = Math.min(x[i], limit);
+  }
+  return x.map((v) => (v / width) * 100);
+}
+
 function Timeline({
   steps,
   duration,
@@ -44,6 +62,16 @@ function Timeline({
   onSeek: (i: number) => void;
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const lefts = layoutDots(steps.map((s) => s.t), duration, width);
   const activeIdx = steps.reduce((acc, s, i) => (s.t <= current + 0.25 ? i : acc), -1);
   const shown = open ?? null;
 
@@ -55,7 +83,7 @@ function Timeline({
           {steps.length} actions · {clock(duration)}
         </span>
       </div>
-      <div className="relative mt-3 h-8" onMouseLeave={() => setOpen(null)}>
+      <div ref={track} className="relative mt-3 h-8" onMouseLeave={() => setOpen(null)}>
         <div aria-hidden className="absolute inset-x-0 top-1/2 h-px bg-line-strong" />
         <div
           aria-hidden
@@ -64,7 +92,7 @@ function Timeline({
         />
         <ol className="contents">
           {steps.map((s, i) => {
-            const left = Math.min(100, (s.t / duration) * 100);
+            const left = lefts[i];
             const isActive = i === activeIdx;
             return (
               <li key={i} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%` }}>
@@ -77,6 +105,9 @@ function Timeline({
                   onMouseEnter={() => setOpen(i)}
                   onFocus={() => setOpen(i)}
                   onBlur={() => setOpen(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setOpen(null);
+                  }}
                   aria-label={`${clock(s.t)} ${s.label}`}
                   aria-describedby={shown === i ? `step-tip-${i}` : undefined}
                   className="grid size-6 place-items-center rounded-full"
@@ -93,26 +124,29 @@ function Timeline({
                     )}
                   />
                 </button>
-                {shown === i && (
-                  <div
-                    id={`step-tip-${i}`}
-                    role="tooltip"
-                    className={cx(
-                      "absolute bottom-full z-10 mb-2 w-72 rounded-card border border-line-strong bg-surface p-3 text-left shadow-none",
-                      left < 20 ? "left-0" : left > 80 ? "right-0" : "left-1/2 -translate-x-1/2",
-                    )}
-                  >
-                    <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-accent">
-                      {clock(s.t)} · {s.action}
-                    </p>
-                    <p className="mt-1 text-sm text-ink">{s.label}</p>
-                    {s.reasoning && <p className="mt-1.5 text-[13px] leading-snug text-ink-muted">{s.reasoning}</p>}
-                  </div>
-                )}
               </li>
             );
           })}
         </ol>
+        {shown != null && steps[shown] && (
+          <div
+            id={`step-tip-${shown}`}
+            role="tooltip"
+            className="absolute bottom-full z-10 mb-1 w-[min(18rem,100%)] rounded-card border border-line-strong bg-surface p-3 text-left"
+            // Centered on its dot, clamped so it never leaves the track.
+            style={{
+              left: `clamp(0px, calc(${lefts[shown]}% - min(9rem, 50%)), calc(100% - min(18rem, 100%)))`,
+            }}
+          >
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-accent">
+              {clock(steps[shown].t)} · {steps[shown].action}
+            </p>
+            <p className="mt-1 text-sm text-ink">{steps[shown].label}</p>
+            {steps[shown].reasoning && (
+              <p className="mt-1.5 text-[13px] leading-snug text-ink-muted">{steps[shown].reasoning}</p>
+            )}
+          </div>
+        )}
       </div>
       <p className="mt-2 min-h-5 font-mono text-xs text-ink-muted">
         {activeIdx >= 0 ? (
@@ -151,7 +185,7 @@ export function DemoPlayer({
   const tail = failLines.length > (submission.errorTail?.length ?? 0) ? failLines : (submission.errorTail ?? []);
 
   return (
-    <div id="demo" className="scroll-mt-20">
+    <div id="demo" className="min-w-0 scroll-mt-20">
       {live && (
         <div className="mb-3 flex gap-5">
           {[

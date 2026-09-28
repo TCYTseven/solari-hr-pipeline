@@ -165,7 +165,7 @@ export default function HowPage() {
 
       <Divider className="my-14 md:my-16" />
 
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <ol className="flex flex-col gap-8">
           {STEPS.map((s) => (
             <li key={s.n} className="grid grid-cols-[40px_1fr] gap-3">

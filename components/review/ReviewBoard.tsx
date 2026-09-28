@@ -25,6 +25,9 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
   const [view, setView] = useState<View>("table");
   const [sel, setSel] = useState(0);
   const rows = useRef<Array<HTMLElement | null>>([]);
+  // Only scroll after j/k. Scrolling on mount moves the browser's Tab
+  // starting point past the skip link and nav.
+  const moved = useRef(false);
   const threshold = topScoreThreshold(submissions);
   const selected = Math.min(sel, Math.max(0, submissions.length - 1));
 
@@ -36,9 +39,11 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
       const s = submissions[selected];
       if (e.key === "j") {
         e.preventDefault();
+        moved.current = true;
         setSel(Math.min(submissions.length - 1, selected + 1));
       } else if (e.key === "k") {
         e.preventDefault();
+        moved.current = true;
         setSel(Math.max(0, selected - 1));
       } else if (e.key === "Enter" && s && (!t || t === document.body || t.dataset.reviewRow != null)) {
         e.preventDefault();
@@ -53,8 +58,10 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
   }, [submissions, selected, router]);
 
   useEffect(() => {
-    rows.current[selected]?.scrollIntoView({ block: "nearest" });
+    if (moved.current) rows.current[selected]?.scrollIntoView({ block: "nearest" });
   }, [selected, view]);
+
+  const current = submissions[selected];
 
   return (
     <div>
@@ -63,17 +70,32 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
           label="Layout"
           value={view}
           onChange={setView}
+          idPrefix="review-view"
+          panelId="review-board"
           items={[
             { value: "table", label: "Table" },
             { value: "grid", label: "Grid" },
           ]}
         />
         <p className="flex flex-wrap items-center gap-2 pb-3 font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">
-          <Kbd>J</Kbd>/<Kbd>K</Kbd> move <span className="mx-1 text-ink-faint">·</span> <Kbd>Enter</Kbd> open{" "}
-          <span className="mx-1 text-ink-faint">·</span> <Kbd>O</Kbd> repo
+          <Kbd>J</Kbd>/<Kbd>K</Kbd> move{" "}
+          <span aria-hidden className="mx-1 text-ink-faint">
+            ·
+          </span>{" "}
+          <Kbd>Enter</Kbd> open{" "}
+          <span aria-hidden className="mx-1 text-ink-faint">
+            ·
+          </span>{" "}
+          <Kbd>O</Kbd> repo
         </p>
       </div>
 
+      <h2 className="sr-only">Ranked submissions</h2>
+      <p className="sr-only" aria-live="polite">
+        {current ? `Selected ${selected + 1} of ${submissions.length}: ${current.owner}, ${current.title}` : ""}
+      </p>
+
+      <div id="review-board" role="tabpanel" aria-labelledby={`review-view-tab-${view}`}>
       {submissions.length === 0 ? (
         <p className="mt-12 text-ink-muted">No submissions yet.</p>
       ) : view === "table" ? (
@@ -169,6 +191,7 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }

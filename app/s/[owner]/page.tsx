@@ -81,7 +81,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
         </div>
       </header>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <DemoPlayer submission={s} run={run} startLive={sp.live === "1"} />
         <div className="flex flex-col gap-4">
           <ScorePanel score={s.score} />

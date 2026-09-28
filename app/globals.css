@@ -50,6 +50,8 @@
 @layer base {
   html {
     background: var(--bg);
+    /* Keeps focused and anchored content clear of the 56px sticky nav. */
+    scroll-padding-top: 72px;
   }
 
   body {

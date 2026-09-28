@@ -128,6 +128,7 @@ export function SubmissionCard({ s, top, selected = false }: { s: Submission; to
         {s.score ? (
           <span className={top ? "text-accent" : "text-ink"} title={top ? "Top 10% score" : undefined}>
             {s.score.total.toFixed(1)} / 5
+            {top && <span className="sr-only"> (top 10%)</span>}
           </span>
         ) : (
           <span className="text-ink-muted">-</span>

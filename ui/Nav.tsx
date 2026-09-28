@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { buttonClass } from "./Button";
 import { cx } from "./cx";
 
@@ -21,6 +21,18 @@ export function Nav() {
   // The menu is open for one pathname; navigating closes it without an effect.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
+  const toggle = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setOpenOn(null);
+      toggle.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <header
@@ -69,6 +81,7 @@ export function Nav() {
         </ul>
 
         <button
+          ref={toggle}
           type="button"
           className="ml-auto grid size-9 place-items-center rounded-btn border border-line-strong text-ink md:hidden"
           aria-expanded={open}
@@ -97,7 +110,11 @@ export function Nav() {
                     <Link
                       href={l.href}
                       aria-current={active ? "page" : undefined}
-                      className={cx(linkClass, "block py-3", active ? "text-accent" : "text-ink-muted")}
+                      className={cx(
+                        linkClass,
+                        "inline-block border-b-2 py-3",
+                        active ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
+                      )}
                     >
                       {l.label}
                     </Link>

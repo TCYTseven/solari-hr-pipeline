@@ -18,6 +18,7 @@ export function Tabs<T extends string>({
   onChange,
   label,
   idPrefix,
+  panelId,
   className,
   size = "md",
 }: {
@@ -25,8 +26,10 @@ export function Tabs<T extends string>({
   value: T;
   onChange: (value: T) => void;
   label: string;
-  /** When set, tabs point at panels with id `${idPrefix}-panel-${value}`. */
+  /** Tab ids are `${idPrefix}-tab-${value}`, for the panel's aria-labelledby. */
   idPrefix?: string;
+  /** id of the single panel whose content the tabs switch. */
+  panelId?: string;
   className?: string;
   size?: "sm" | "md";
 }) {
@@ -60,7 +63,7 @@ export function Tabs<T extends string>({
             role="tab"
             id={`${prefix}-tab-${item.value}`}
             aria-selected={active}
-            aria-controls={idPrefix ? `${prefix}-panel-${item.value}` : undefined}
+            aria-controls={panelId}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(item.value)}
             onKeyDown={(e) => onKeyDown(e, i)}

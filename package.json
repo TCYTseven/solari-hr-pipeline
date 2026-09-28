@@ -13,7 +13,8 @@
     "db:seed": "node --env-file-if-exists=.env --import tsx scripts/db.mts seed",
     "db:reset": "node --env-file-if-exists=.env --import tsx scripts/db.mts reset",
     "sdk-issue": "node --env-file-if-exists=.env --import tsx scripts/sdk-issue.mts",
-    "db:restore": "node --env-file-if-exists=.env --import tsx scripts/db.mts restore"
+    "db:restore": "node --env-file-if-exists=.env --import tsx scripts/db.mts restore",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.3.6",
@@ -24,6 +25,8 @@
     "simple-icons": "^16.33.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22",
     "@types/pg": "^8.23.1",

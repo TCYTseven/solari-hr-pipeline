@@ -1,14 +1,16 @@
 import type { Product, ProjectType, Status } from "./types";
 
-export const STATUS: Record<Status, { label: string; color: string }> = {
-  booted: { label: "Booted", color: "var(--ok)" },
-  running: { label: "Running", color: "var(--run)" },
-  build_failed: { label: "Build failed", color: "var(--fail)" },
-  timeout: { label: "Timeout", color: "var(--warn)" },
-  needs_secrets: { label: "Needs secrets", color: "var(--warn)" },
-  skipped: { label: "Skipped", color: "var(--skip)" },
-  opted_out: { label: "Opted out", color: "var(--skip)" },
-  queued: { label: "Queued", color: "var(--skip)" },
+// `color` is the dot. `text` is the word next to it: --skip (#636363) fails
+// contrast as text, so grey statuses print their word in --text-muted.
+export const STATUS: Record<Status, { label: string; color: string; text: string }> = {
+  booted: { label: "Booted", color: "var(--ok)", text: "var(--ok)" },
+  running: { label: "Running", color: "var(--run)", text: "var(--run)" },
+  build_failed: { label: "Build failed", color: "var(--fail)", text: "var(--fail)" },
+  timeout: { label: "Timeout", color: "var(--warn)", text: "var(--warn)" },
+  needs_secrets: { label: "Needs secrets", color: "var(--warn)", text: "var(--warn)" },
+  skipped: { label: "Skipped", color: "var(--skip)", text: "var(--text-muted)" },
+  opted_out: { label: "Opted out", color: "var(--skip)", text: "var(--text-muted)" },
+  queued: { label: "Queued", color: "var(--skip)", text: "var(--text-muted)" },
 };
 
 export const PRODUCT_LABEL: Record<Product, string> = {
