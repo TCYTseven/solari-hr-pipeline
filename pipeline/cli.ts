@@ -115,11 +115,16 @@ async function resolveForks(flags: ScanFlags, store: Store): Promise<ForkRef[]> 
 export function assertNoSharedSecrets(env: Record<string, string | undefined> = process.env): void {
   const shared = sharedSecretConflicts(env);
   if (shared.length === 0) return;
+  const why: Record<string, string> = {
+    SOLARI_API_KEY:
+      "with the same Solari key a candidate's code can list and kill the screener's VMs and other candidates' (they are all tagged screener=1) and spend on your account",
+    ANTHROPIC_API_KEY: "a candidate's code could spend on, and read usage of, the screener's Anthropic account",
+    GITHUB_TOKEN: "a candidate's code could act on GitHub as the screener",
+  };
   throw new Error(
     `Refusing to scan: ${shared.map((k) => `SUBMISSION_${k}`).join(", ")} ${shared.length === 1 ? "is" : "are"} the same as the screener's own ` +
-      `${shared.join(", ")}. Submissions are untrusted code and would get your key: with a shared Solari key a candidate ` +
-      "can list and kill the screener's VMs and other candidates' (they are all tagged screener=1), and spend on your account. " +
-      "Create a separate key (a separate Solari org or project) for SUBMISSION_* and try again.",
+      `${shared.join(", ")}. Submissions are untrusted code: ${shared.map((k) => why[k]).join("; ")}. ` +
+      "Give submissions a separate key (for Solari, a separate org or project) and try again.",
   );
 }
 

@@ -19,6 +19,8 @@ export type ActionInput = Record<string, unknown>;
 export interface Surface {
   readonly label: StageTiming["surface"];
   readonly product: Product;
+  /** Requests the network policy refused (browser surfaces), for the demo log. */
+  readonly blocked: string[];
   readonly width: number;
   readonly height: number;
   /** Epoch ms when the recording started (DemoStep.t is relative to it). */
@@ -60,6 +62,7 @@ function modifierKeys(text: unknown): string[] {
 
 abstract class PlaywrightSurface implements Surface {
   abstract readonly label: StageTiming["surface"];
+  readonly blocked: string[] = [];
   readonly product = "browser" as const;
   readonly width = config.viewport.width;
   readonly height = config.viewport.height;
@@ -116,13 +119,19 @@ abstract class PlaywrightSurface implements Surface {
     const origin = appUrl ? new URL(appUrl).origin : null;
     await ctx.route("**/*", async (route) => {
       const url = route.request().url();
-      if (shouldBlockRequest(url, origin)) return route.abort("blockedbyclient");
+      if (shouldBlockRequest(url, origin)) {
+        if (this.blocked.length < 50) this.blocked.push(url);
+        return route.abort("blockedbyclient");
+      }
       const withToken = withPreviewToken(url, appUrl);
       return withToken ? route.continue({ url: withToken }) : route.continue();
     });
     await ctx.routeWebSocket(
       (u) => shouldBlockRequest(u.href, origin),
-      (ws) => ws.close(),
+      (ws) => {
+        if (this.blocked.length < 50) this.blocked.push(ws.url());
+        return ws.close();
+      },
     );
   }
 
@@ -345,6 +354,7 @@ export class SolariBrowserSurface extends PlaywrightSurface {
 
 export class SolariDesktopSurface implements Surface {
   readonly label = "Desktop" as const;
+  readonly blocked: string[] = [];
   readonly product = "desktop" as const;
   readonly width = config.desktopResolution.width;
   readonly height = config.desktopResolution.height;

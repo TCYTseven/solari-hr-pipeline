@@ -163,9 +163,14 @@ class DockerBox implements Box {
 
   async clone(input: { tar: Buffer; sourceUrl: string | null; sha: string }, log: (s: string) => void): Promise<ExecResult> {
     const id = this.need();
-    log(`$ git archive ${input.sha.slice(0, 12)} | docker cp - ${id}:/work\n`);
-    await mustRun("docker", ["exec", id, "mkdir", "-p", "/work"], { timeoutMs: 30_000 });
-    const r = await runProc("docker", ["cp", "-", `${id}:/work`], { input: input.tar, timeoutMs: 300_000 });
+    // Unpack inside the container, not with `docker cp`: the daemon rejects archives whose
+    // symlinks point outside (a candidate's repo may have one), and inside the box such a
+    // link can only reach the container's own filesystem. GNU tar refuses ../ members.
+    log(`$ git archive ${input.sha.slice(0, 12)} | docker exec -i ${id} tar -x -C /work\n`);
+    const r = await runProc("docker", ["exec", "-i", id, "sh", "-c", "mkdir -p /work && tar -xf - -C /work --no-same-owner"], {
+      input: input.tar,
+      timeoutMs: 300_000,
+    });
     const out = r.output.trim();
     const summary = r.code === 0 ? `Copied ${(input.tar.length / 1024).toFixed(0)} kB into ${this.repoPath}\n` : `${out}\n`;
     log(summary);
@@ -173,6 +178,7 @@ class DockerBox implements Box {
   }
 
   private dir(cwd?: string): string {
+    if (cwd === "/") return "/";
     return !cwd || cwd === "." ? this.repoPath : path.posix.join(this.repoPath, cwd);
   }
 

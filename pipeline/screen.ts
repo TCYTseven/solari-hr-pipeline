@@ -627,6 +627,7 @@ async function runDemo(
     writeAtomic(media.file("captions.vtt"), toVtt(result.steps, result.durationSec + 1));
     files.captions = "captions.vtt";
   }
+  for (const url of s.blocked) rec.log("demo", `# blocked a request from the page to ${url} (private/local address)\n`);
   if (result.endedBy === "refusal") out.note = "Demo agent declined";
   rec.log("demo", `# demo ended (${result.endedBy}) after ${result.actions} actions, ${result.durationSec.toFixed(1)}s${video ? `, saved ${video}` : ", no video"}\n`);
   return { demo: result, product: s.product, files };
