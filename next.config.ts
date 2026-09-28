@@ -13,10 +13,6 @@ const nextConfig: NextConfig = {
       fallback: [],
     };
   },
-  async headers() {
-    // Belt and braces for the private review page: robots meta plus the header.
-    return [{ source: "/review", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
-  },
 };
 
 export default nextConfig;

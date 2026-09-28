@@ -123,10 +123,3 @@ test("review page: j/k move the selection and the preview, Enter opens it", asyn
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/s/${second}\\?sort=score$`));
 });
-
-test("review page with a wrong key is an ordinary 404", async ({ page }) => {
-  const res = await page.goto("/review?key=nope");
-  expect(res?.status()).toBe(404);
-  await expect(page).toHaveTitle(/Not found/);
-  expect(res?.headers()["x-robots-tag"]).toContain("noindex");
-});

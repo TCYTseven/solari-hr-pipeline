@@ -22,6 +22,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 240_000,
-    env: { SCREENER_DATA: "mock", REVIEW_KEY: "e2e-key" },
+    env: { SCREENER_DATA: "mock" },
   },
 });

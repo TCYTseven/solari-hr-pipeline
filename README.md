@@ -25,7 +25,7 @@ Every stage writes to Postgres as it finishes. A trigger broadcasts each change,
 | `/stats` | Boot time by project type, product usage, VM totals, create latency, failure rate, common build failures, SDK issues |
 | `/how` | The pipeline in five steps and the SDK calls it makes |
 | `/optout` | Candidates remove their submission by GitHub username |
-| `/review?key=...` | Private ranking for the hiring manager: the list on the left and a live preview of the selected submission on the right (or a table). `j`/`k` or the arrow keys to move, `enter` to open, `o` for the repo. |
+| `/review` | Every submission ranked by score: the list on the left and a live preview of the selected submission on the right (or a table). `j`/`k` or the arrow keys to move, `enter` to open, `o` for the repo. |
 
 ## Quick start (macOS)
 
@@ -46,7 +46,6 @@ Open `.env` and fill in:
 | `ANTHROPIC_API_KEY` | Triage, the demo agent and scoring (Claude Sonnet) |
 | `SOLARI_API_KEY` | Builds in Solari Sandboxes, demos in Solari Browsers and Desktops |
 | `SUBMISSION_SOLARI_API_KEY` | The Solari key handed to submissions, since most of them call Solari themselves. Use a separate key (ideally a separate org) with a spend cap. |
-| `REVIEW_KEY` | Secret for `/review?key=...` |
 | `GITHUB_TOKEN` | Optional. Raises GitHub's API limit from 60 to 5,000 requests an hour. |
 
 Then:
@@ -115,7 +114,6 @@ Submissions are untrusted code, so:
 - **Prompt injection.** Repository content and web pages go to Claude inside tagged blocks marked as untrusted data, never as instructions.
 - **Docker fallback.** Each run gets its own container and network, all Linux capabilities dropped except the five installs need, no-new-privileges and a process limit. The demo browser can't reach localhost or private addresses other than the app itself. Postgres listens on localhost only, with a random password. Containers still have outbound internet (installs need it) and can reach host services that listen on every interface, so a Solari Sandbox is the stronger boundary: prefer a Solari key when screening strangers' code.
 - **Opt-outs.** Checked before and during every run. Anyone can opt any username out; if someone misuses the form, `npm run db:restore -- <login>` undoes it.
-- **Review page.** The review key lives in the URL. Share that link only with reviewers; the page sends no referrer and is kept out of search engines.
 
 ## Deploying
 
