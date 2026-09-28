@@ -12,6 +12,7 @@ import { PRODUCTS } from "@/lib/types";
 import { Container } from "@/ui/Container";
 import { Divider } from "@/ui/Divider";
 import { Label } from "@/ui/Label";
+import { LiveRefresh } from "@/ui/LiveRefresh";
 import { MonoAnchor, monoLinkClass } from "@/ui/MonoLink";
 import { ProductBadge } from "@/ui/ProductBadge";
 import { RelativeTime } from "@/ui/RelativeTime";
@@ -38,6 +39,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
 
   return (
     <Container className="pb-24 pt-10 md:pt-12">
+      <LiveRefresh owner={s.owner} />
       <Link href="/" className={cx(monoLinkClass, "text-ink-muted no-underline hover:text-ink")}>
         ← All submissions
       </Link>

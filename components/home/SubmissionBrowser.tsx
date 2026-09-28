@@ -5,6 +5,7 @@ import { topScoreThreshold } from "@/lib/metrics";
 import type { Submission } from "@/lib/types";
 import { Container } from "@/ui/Container";
 import { Tabs } from "@/ui/Tabs";
+import { cx } from "@/ui/cx";
 import { SubmissionCard } from "./SubmissionCard";
 import { DEFAULT_STATE, SORTS, TABS, type BrowserState, type Sort } from "./state";
 
@@ -49,6 +50,9 @@ export function SubmissionBrowser({
   const [state, setState] = useState(initial);
   const visible = useMemo(() => applyFilters(submissions, state), [submissions, state]);
   const threshold = useMemo(() => topScoreThreshold(submissions), [submissions]);
+
+  // Owners present on first paint. Anything that arrives later (live scan) fades in.
+  const [initialOwners] = useState(() => new Set(submissions.map((s) => s.owner)));
 
   function update(patch: Partial<BrowserState>) {
     const next = { ...state, ...patch };
@@ -110,7 +114,10 @@ export function SubmissionBrowser({
       {visible.length > 0 ? (
         <ul className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {visible.map((s) => (
-            <li key={s.owner} className="flex [&>article]:w-full">
+            <li
+              key={s.owner}
+              className={cx("flex [&>article]:w-full", !initialOwners.has(s.owner) && "fade-in")}
+            >
               <SubmissionCard s={s} top={threshold != null && s.score != null && s.score.total >= threshold} />
             </li>
           ))}

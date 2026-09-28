@@ -6,6 +6,7 @@ import type { SdkIssue } from "@/lib/types";
 import { Container } from "@/ui/Container";
 import { Divider } from "@/ui/Divider";
 import { Label } from "@/ui/Label";
+import { LiveRefresh } from "@/ui/LiveRefresh";
 import { Metric } from "@/ui/Metric";
 
 export const metadata: Metadata = {
@@ -59,6 +60,7 @@ export default async function StatsPage() {
 
   return (
     <Container className="pb-24 pt-16 md:pt-24">
+      <LiveRefresh minIntervalMs={5000} />
       <Label className="text-accent">Stats</Label>
       <h1 className="mt-4 font-display text-[32px] font-medium leading-[1.2] tracking-[-0.03em] text-ink md:text-[44px]">
         Screening at scale
