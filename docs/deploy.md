@@ -60,7 +60,6 @@ or from cron.
 | --- | --- |
 | `DATABASE_URL` | hosted Postgres (pooled is fine) |
 | `LIVE_DATABASE_URL` | direct connection, if `DATABASE_URL` is pooled |
-| `REVIEW_KEY` | a long random string for `/review?key=...` |
 | `MEDIA_PUBLIC_URL` | the bucket's public URL |
 | `NEXT_PUBLIC_REPO_URL` | footer GitHub link (optional) |
 | `NEXT_PUBLIC_X_URL` | footer X link (optional) |

@@ -10,6 +10,7 @@ import { cx } from "./cx";
 
 const LINKS = [
   { href: "/", label: "Submissions", match: (p: string) => p === "/" || p.startsWith("/s/") },
+  { href: "/review", label: "Review", match: (p: string) => p.startsWith("/review") },
   { href: "/stats", label: "Stats", match: (p: string) => p.startsWith("/stats") },
   { href: "/how", label: "How it works", match: (p: string) => p.startsWith("/how") },
 ];

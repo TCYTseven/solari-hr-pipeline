@@ -291,14 +291,14 @@ A single diagram and 5 short steps: Discover forks → Triage with Claude → Bu
 - Input + amber primary button "Remove my submission".
 - Confirmation: "Removed. Your submission is hidden from the dashboard."
 
-### 3.7 Private view for Harry: `/review?key=...`
+### 3.7 Review view: `/review`
 
 Same grid, but sorted by score, with a compact table toggle:
 
 | # | Owner | Project | Products | Booted | Score | Demo |
 |---|---|---|---|---|---|---|
 
-Keyboard shortcuts: `j`/`k` to move, `enter` to open, `o` to open repo. Keep this page unindexed (`noindex`).
+Keyboard shortcuts: `j`/`k` to move, `enter` to open, `o` to open repo.
 
 ---
 
