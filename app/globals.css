@@ -26,9 +26,10 @@
   --warn: #F5C66A;
   --skip: #636363;
 
-  --font-display: "Inter Display", "Inter Tight", Inter, system-ui, sans-serif;
-  --font-body: Inter, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* The --font-inter* variables come from next/font (app/fonts.ts). */
+  --font-display: "Inter Display", var(--font-inter), var(--font-inter-tight), Inter, system-ui, sans-serif;
+  --font-body: var(--font-inter), Inter, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
 
   --r-card: 10px;
   --r-btn: 6px;
@@ -59,6 +60,7 @@ body {
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
 }
 
 @media (min-width: 810px) {
