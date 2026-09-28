@@ -29,7 +29,7 @@ Every stage writes to Postgres as it finishes. A trigger broadcasts each change,
 
 ## Quick start (macOS)
 
-You need Node 20.9 or newer (22 recommended) and Docker Desktop running.
+You need Node 22.9 or newer (`node --version`; with nvm, `nvm install` reads `.nvmrc`) and Docker Desktop running.
 
 ```bash
 git clone https://github.com/TCYTseven/solari-hr-pipeline.git
