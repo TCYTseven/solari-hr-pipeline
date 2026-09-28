@@ -55,12 +55,12 @@ export default function UiKit() {
         <span className="w-6" />
         <StackIcons stack={[{ slug: "python", name: "Python" }, { slug: "nodedotjs", name: "Node.js" }, { slug: "googlechrome", name: "Chrome" }, { slug: "zig-ish", name: "Zigish" }]} />
       </section>
-      <section className="grid grid-cols-2 gap-8 md:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-8 md:grid-cols-4">
         <Metric value={<CountUp value={214} />} label="Forks found" />
         <Metric value={<CountUp value={163} />} label="Booted" />
         <Metric value={<CountUp value={1902} />} label="VMs launched" />
         <Metric value={<CountUp value={38} suffix="s" />} label="Median boot" />
-      </section>
+      </dl>
       <Divider variant="line" />
       <section className="grid gap-8 md:grid-cols-2">
         <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">

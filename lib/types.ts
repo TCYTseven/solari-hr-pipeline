@@ -67,7 +67,7 @@ export type StageName = "create" | "clone" | "install" | "boot" | "demo" | "rele
 export const STAGES: StageName[] = ["create", "clone", "install", "boot", "demo", "release"];
 
 export interface StageTiming {
-  surface: "Sandbox" | "Browser" | "Desktop" | "Local";
+  surface: "Sandbox" | "Browser" | "Desktop" | "Local sandbox" | "Local browser";
   create: number | null;
   clone: number | null;
   install: number | null;

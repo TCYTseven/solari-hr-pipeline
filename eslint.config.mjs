@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     // Cookbook boilerplate, removed at the end of the build.
     "examples/**",
     "applications/**",
+    ".claude/**",
   ]),
 ]);
 

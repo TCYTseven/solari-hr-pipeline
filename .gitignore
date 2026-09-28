@@ -31,3 +31,6 @@ next-env.d.ts
 *.pem
 npm-debug.log*
 __pycache__/
+
+# agent worktrees
+/.claude/

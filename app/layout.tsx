@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getScanInfo } from "@/lib/data";
 import { Footer } from "@/ui/Footer";
 import { Nav } from "@/ui/Nav";
 import { fontVariables } from "./fonts";
@@ -15,7 +16,8 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const scan = await getScanInfo();
   return (
     <html lang="en" className={fontVariables}>
       <body className="flex min-h-dvh flex-col">
@@ -23,7 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main id="main" className="flex-1">
           {children}
         </main>
-        <Footer lastScanAt={null} />
+        <Footer lastScanAt={scan.lastScanAt} />
       </body>
     </html>
   );

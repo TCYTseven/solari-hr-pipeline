@@ -14,18 +14,16 @@ export function Metric({
   className?: string;
 }) {
   return (
-    <div className={cx("flex flex-col gap-1.5", className)}>
-      <span
+    <div className={cx("flex flex-col-reverse justify-end gap-1.5", className)}>
+      <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">{label}</dt>
+      <dd
         className={cx(
           "font-mono font-medium leading-none tracking-normal text-ink tabular-nums",
           size === "lg" ? "text-[26px] md:text-[32px]" : "text-lg md:text-xl",
         )}
       >
         {value}
-      </span>
-      <span className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
-        {label}
-      </span>
+      </dd>
     </div>
   );
 }
