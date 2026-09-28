@@ -20,12 +20,12 @@ Every stage writes to Postgres as it finishes. A trigger broadcasts each change,
 
 | Page | What it shows |
 | --- | --- |
-| `/` | Hero metrics and the submission grid, with product tabs, search, sort and an "only booted" filter |
-| `/s/[owner]` | Demo video with a clickable step timeline, score breakdown, AI summary, run timing table, install / run / demo logs, and a live view while a run is active |
+| `/` | The submission grid, with status and product filters (with counts), search and sort. Filters live in the URL. |
+| `/s/[owner]` | One submission: the demo video with a clickable step timeline, score and facts beside it, and tabs for the summary, every agent step, timing and logs. Previous / Next (or the arrow keys) walk the list you came from, and the back link returns to it. |
 | `/stats` | Boot time by project type, product usage, VM totals, create latency, failure rate, common build failures, SDK issues |
 | `/how` | The pipeline in five steps and the SDK calls it makes |
 | `/optout` | Candidates remove their submission by GitHub username |
-| `/review?key=...` | Private, unindexed ranking for the hiring manager: table or grid, `j`/`k` to move, `enter` to open, `o` for the repo |
+| `/review?key=...` | Private ranking for the hiring manager: the list on the left and a live preview of the selected submission on the right (or a table). `j`/`k` or the arrow keys to move, `enter` to open, `o` for the repo. |
 
 ## Quick start (macOS)
 
