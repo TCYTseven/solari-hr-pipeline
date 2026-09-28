@@ -1,5 +1,6 @@
 // Data access for the dashboard. Pages only talk to this module.
-import { MOCK_SCAN, MOCK_SUBMISSIONS, MOCK_VM_COUNTS, mockRunFor } from "./mock";
+import { MOCK_ISSUES, MOCK_SCAN, MOCK_SUBMISSIONS, MOCK_VM_COUNTS, mockRunFor } from "./mock";
+import { computeStats, type Stats } from "./stats";
 import { median } from "./metrics";
 import type { Run, ScanInfo, Submission } from "./types";
 
@@ -34,4 +35,18 @@ export async function getSubmission(owner: string): Promise<{ submission: Submis
   const submission = MOCK_SUBMISSIONS.find((s) => s.owner.toLowerCase() === key && !s.hidden);
   if (!submission) return null;
   return { submission, run: mockRunFor(submission) };
+}
+
+export async function getStats(): Promise<Stats> {
+  const subs = await listSubmissions();
+  const runs = subs.map(mockRunFor).filter((r): r is Run => r != null);
+  const vmsLaunched = Object.values(MOCK_VM_COUNTS).reduce((a, b) => a + b, 0);
+  return computeStats({
+    submissions: subs,
+    sandboxCreateMs: runs.flatMap((r) => r.timings.filter((t) => t.surface === "Sandbox" && t.create != null).map((t) => t.create as number)),
+    vmsLaunched,
+    vmSeconds: vmsLaunched * 74,
+    failureReasons: runs.map((r) => r.failureReason).filter((r): r is string => !!r),
+    issues: MOCK_ISSUES,
+  });
 }

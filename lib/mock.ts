@@ -1,6 +1,6 @@
 // Mock data for building the dashboard without a database (and for demos:
 // when DATABASE_URL is unset the site runs on this). Every status appears.
-import type { Run, Submission } from "./types";
+import type { Run, SdkIssue, Submission } from "./types";
 
 const now = Date.now();
 const ago = (min: number) => new Date(now - min * 60_000).toISOString();
@@ -336,6 +336,13 @@ export const MOCK_RUNS: Record<string, Run> = {
   },
 };
 
+const MOCK_FAILURE_REASONS: Record<string, string> = {
+  "tomasz-dev": "Dependency install failed",
+  "lena-okafor": "Crashed on start",
+  "sam-whitfield": "Timed out",
+  "noor-a": "Missing env var",
+};
+
 /** A minimal run for mock submissions without a hand-written one. */
 export function mockRunFor(s: Submission): Run | null {
   if (MOCK_RUNS[s.owner]) return MOCK_RUNS[s.owner];
@@ -351,7 +358,7 @@ export function mockRunFor(s: Submission): Run | null {
     timings:
       s.status === "skipped"
         ? []
-        : [{ surface: "Sandbox", create: 92, clone: 1_800, install: failed ? 24_600 : 18_200, boot: failed ? null : 4_100, demo: null, release: 3 }],
+        : [{ surface: "Sandbox", create: 70 + ((s.forkNumber * 37) % 90), clone: 1_800, install: failed ? 24_600 : 18_200, boot: failed ? null : 4_100, demo: null, release: 3 }],
     logs: {
       install: `$ git clone --depth 50 ${s.repoUrl} /work/repo\nCloning into '/work/repo'...\n${s.status === "build_failed" ? (s.errorTail ?? []).join("\n") : "# install finished"}`,
       run: s.status === "timeout" || s.status === "needs_secrets" ? (s.errorTail ?? []).join("\n") : "",
@@ -360,6 +367,34 @@ export function mockRunFor(s: Submission): Run | null {
     steps: [],
     streamUrl: null,
     vmCount: MOCK_VM_COUNTS[s.owner] ?? 0,
-    failureReason: s.status === "build_failed" ? "Dependency install failed" : s.status === "timeout" ? "Timed out" : null,
+    failureReason: MOCK_FAILURE_REASONS[s.owner] ?? null,
   };
 }
+
+// Real SDK quirks found while building the screener, kept as sample rows.
+export const MOCK_ISSUES: SdkIssue[] = [
+  {
+    id: "mock-1",
+    title: "commands.run drops early stdout from the result when onStdout is set",
+    url: "https://github.com/solari-sdk/solari-cookbook/issues",
+    kind: "issue",
+    state: "open",
+    openedAt: ago(60 * 26),
+  },
+  {
+    id: "mock-2",
+    title: "commands.run ignores timeoutMs once the control channel is connected",
+    url: "https://github.com/solari-sdk/solari-cookbook/issues",
+    kind: "issue",
+    state: "open",
+    openedAt: ago(60 * 25),
+  },
+  {
+    id: "mock-3",
+    title: "Browser replay polling: pending uploads throw with status undefined, not 404",
+    url: "https://github.com/solari-sdk/solari-cookbook/pulls",
+    kind: "pr",
+    state: "merged",
+    openedAt: ago(60 * 50),
+  },
+];
