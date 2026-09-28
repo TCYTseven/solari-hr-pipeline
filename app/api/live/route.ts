@@ -4,6 +4,10 @@ import { hasDatabase } from "@/lib/db";
 import { subscribe } from "@/lib/live";
 
 export const dynamic = "force-dynamic";
+// Serverless hosts cap how long a function may stream. The stream ends itself
+// a little before that and EventSource reconnects on its own.
+export const maxDuration = 300;
+const STREAM_LIFETIME_MS = 270_000;
 
 export async function GET(req: Request) {
   // Mock mode has nothing to stream. 204 tells EventSource not to reconnect.
@@ -24,8 +28,10 @@ export async function GET(req: Request) {
       const unsubscribe = subscribe((e) => send(`event: change\ndata: ${JSON.stringify(e)}\n\n`));
       // Comment lines keep proxies from closing an idle stream.
       const ping = setInterval(() => send(": ping\n\n"), 25_000);
+      const lifetime = setTimeout(() => cleanup(), STREAM_LIFETIME_MS);
       cleanup = () => {
         clearInterval(ping);
+        clearTimeout(lifetime);
         unsubscribe();
         try {
           controller.close();

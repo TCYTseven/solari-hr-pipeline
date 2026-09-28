@@ -24,9 +24,12 @@ function hub() {
 
 async function connect() {
   const h = hub();
-  if (h.client || h.connecting || !process.env.DATABASE_URL) return;
+  // LISTEN needs a direct session. Behind a transaction pooler (Neon, Supabase,
+  // PgBouncer) point LIVE_DATABASE_URL at the unpooled connection string.
+  const url = process.env.LIVE_DATABASE_URL || process.env.DATABASE_URL;
+  if (h.client || h.connecting || !url) return;
   h.connecting = true;
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: url });
   const drop = () => {
     if (h.client !== client) return;
     h.client = null;
