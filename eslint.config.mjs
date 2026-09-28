@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "examples/**",
     "applications/**",
     ".claude/**",
+    // Clones and recordings written by the pipeline (untrusted submission code).
+    ".screener/**",
     "test-results/**",
     "playwright-report/**",
   ]),

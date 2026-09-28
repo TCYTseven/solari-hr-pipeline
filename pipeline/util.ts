@@ -154,7 +154,27 @@ export function redact(text: string, secrets: string[] = []): string {
 
 export function truncate(s: string, n: number): string {
   const one = s.replace(/\s+/g, " ").trim();
-  return one.length <= n ? one : `${one.slice(0, Math.max(0, n - 3)).trimEnd()}...`;
+  if (one.length <= n) return one;
+  const cut = one.slice(0, Math.max(0, n - 3));
+  // Prefer ending on a whole word when one ends reasonably close to the limit.
+  const space = cut.lastIndexOf(" ");
+  const head = space >= cut.length * 0.6 ? cut.slice(0, space) : cut;
+  return `${head.trimEnd()}...`;
+}
+
+/**
+ * The dashboard renders summaries as two paragraphs split on a blank line.
+ * If the model returned one block, split it at the sentence end nearest the middle.
+ */
+export function twoParagraphs(text: string): string {
+  const t = text.trim();
+  if (/\n\s*\n/.test(t)) return t;
+  const flat = t.replace(/\s*\n\s*/g, " ");
+  const ends = [...flat.matchAll(/[.!?](?=\s+[A-Z"'(])/g)].map((m) => (m.index ?? 0) + 1);
+  if (ends.length === 0 || flat.length < 240) return flat;
+  const mid = flat.length / 2;
+  const at = ends.reduce((best, e) => (Math.abs(e - mid) < Math.abs(best - mid) ? e : best));
+  return `${flat.slice(0, at).trim()}\n\n${flat.slice(at).trim()}`;
 }
 
 /** Run `fn` over `items` with at most `limit` in flight. */

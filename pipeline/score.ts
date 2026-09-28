@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { DemoStep, Score, Status } from "../lib/types";
 import { MODEL, RefusalError, UNTRUSTED_NOTICE, claude } from "./claude";
 import type { Triage } from "./triage";
-import { errorTail } from "./util";
+import { errorTail, twoParagraphs } from "./util";
 
 export const FAILURE_REASONS = [
   "Missing env var",
@@ -150,5 +150,5 @@ ${input.screenshots.length ? `The ${input.screenshots.length === 1 ? "image show
   const booted = input.status === "booted";
   let failureReason = out.failureReason;
   if (!booted && !failureReason) failureReason = input.status === "timeout" ? "Timed out" : input.status === "needs_secrets" ? "Missing env var" : "Other";
-  return { score, summary: out.summary.trim(), failureReason, raw: out };
+  return { score, summary: twoParagraphs(out.summary), failureReason, raw: out };
 }

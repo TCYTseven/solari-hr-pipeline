@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { submissionEnv, secretValues } from "./config";
-import { capLog, cleanOutput, errorTail, pool, redact, shellQuote, stripAnsi, truncate } from "./util";
+import { capLog, cleanOutput, errorTail, pool, redact, shellQuote, stripAnsi, truncate, twoParagraphs } from "./util";
 
 test("errorTail keeps the last non-empty lines, ANSI stripped", () => {
   const out = "npm ERR! code 1\n\n\u001b[31mnpm ERR! missing script: start\u001b[0m\n  \nnpm ERR! A\nnpm ERR! B\n\n";
@@ -56,6 +56,7 @@ test("redact masks known secrets and key shapes", () => {
 test("truncate collapses whitespace and adds an ellipsis", () => {
   assert.equal(truncate("hello   world", 50), "hello world");
   assert.equal(truncate("abcdefghij", 6), "abc...");
+  assert.equal(truncate("Scrolled down on Evidence screenshot for Surgical update", 40), "Scrolled down on Evidence screenshot...");
 });
 
 test("pool runs every item with bounded concurrency", async () => {
@@ -87,4 +88,17 @@ test("submissionEnv renames SUBMISSION_* and never passes the screener's own key
   const secrets = secretValues(env);
   assert.ok(secrets.includes("sk-ant-screener"));
   assert.ok(secrets.includes("slr_live_candidate"));
+});
+
+test("twoParagraphs keeps a blank-line split and splits a single block near the middle", () => {
+  assert.equal(twoParagraphs("One.\n\nTwo."), "One.\n\nTwo.");
+  const long =
+    "The project boots a sandbox and serves a dashboard. It records every step of the run. " +
+    "The demo agent opened three pages and compared the results. Strengths are the README and tests. " +
+    "Weaknesses are the thin error handling and a hard-coded port.";
+  const out = twoParagraphs(long);
+  const parts = out.split("\n\n");
+  assert.equal(parts.length, 2);
+  assert.equal(parts.join(" "), long);
+  assert.equal(twoParagraphs("Short single paragraph."), "Short single paragraph.");
 });

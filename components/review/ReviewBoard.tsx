@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format";
 import { topScoreThreshold } from "@/lib/metrics";
-import { PRODUCTS, type Submission } from "@/lib/types";
+import type { Submission } from "@/lib/types";
 import { SubmissionCard } from "@/components/home/SubmissionCard";
 import { ProductBadge } from "@/ui/ProductBadge";
 import { StatusPill } from "@/ui/StatusPill";
+import { badgeProducts } from "@/lib/status";
 import { Tabs } from "@/ui/Tabs";
 import { cx } from "@/ui/cx";
 
@@ -138,7 +139,7 @@ export function ReviewBoard({ submissions }: { submissions: Submission[] }) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
-                        {PRODUCTS.filter((p) => s.productsUsed.includes(p)).map((p) => (
+                        {badgeProducts(s).map((p) => (
                           <ProductBadge key={p} product={p} used={s.demoProduct === p} />
                         ))}
                       </div>

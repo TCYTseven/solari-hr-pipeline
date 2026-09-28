@@ -8,7 +8,6 @@ import { ScorePanel } from "@/components/detail/ScorePanel";
 import { getSubmission } from "@/lib/data";
 import { shortSha } from "@/lib/format";
 import { PROJECT_TYPE_LABEL } from "@/lib/status";
-import { PRODUCTS } from "@/lib/types";
 import { Container } from "@/ui/Container";
 import { Divider } from "@/ui/Divider";
 import { Label } from "@/ui/Label";
@@ -17,6 +16,7 @@ import { MonoAnchor, monoLinkClass, monoQuietLinkClass } from "@/ui/MonoLink";
 import { ProductBadge } from "@/ui/ProductBadge";
 import { RelativeTime } from "@/ui/RelativeTime";
 import { StackIcons } from "@/ui/StackIcons";
+import { badgeProducts } from "@/lib/status";
 import { StatusPill } from "@/ui/StatusPill";
 import { cx } from "@/ui/cx";
 
@@ -101,8 +101,8 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
             </dd>
             <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">Products</dt>
             <dd className="flex flex-wrap gap-1.5">
-              {s.productsUsed.length ? (
-                PRODUCTS.filter((p) => s.productsUsed.includes(p)).map((p) => (
+              {badgeProducts(s).length ? (
+                badgeProducts(s).map((p) => (
                   <ProductBadge key={p} product={p} used={s.demoProduct === p} />
                 ))
               ) : (

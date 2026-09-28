@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { formatDuration, padFork } from "@/lib/format";
-import { PRODUCTS, type Submission } from "@/lib/types";
+import type { Submission } from "@/lib/types";
 import { Divider } from "@/ui/Divider";
 import { LogBlock } from "@/ui/LogBlock";
 import { ProductBadge } from "@/ui/ProductBadge";
 import { StackIcons } from "@/ui/StackIcons";
+import { badgeProducts } from "@/lib/status";
 import { StatusPill } from "@/ui/StatusPill";
 import { cx } from "@/ui/cx";
 
@@ -115,7 +116,7 @@ export function SubmissionCard({ s, top, selected = false }: { s: Submission; to
       <div className="mt-4 flex min-h-5 items-center justify-between gap-3">
         <StackIcons stack={s.stack} max={4} />
         <div className="flex flex-wrap justify-end gap-1.5">
-          {PRODUCTS.filter((p) => s.productsUsed.includes(p)).map((p) => (
+          {badgeProducts(s).map((p) => (
             <ProductBadge key={p} product={p} used={s.demoProduct === p} />
           ))}
         </div>

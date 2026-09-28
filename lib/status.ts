@@ -1,4 +1,4 @@
-import type { Product, ProjectType, Status } from "./types";
+import { PRODUCTS, type Product, type ProjectType, type Status, type Submission } from "./types";
 
 // `color` is the dot. `text` is the word next to it: --skip (#636363) fails
 // contrast as text, so grey statuses print their word in --text-muted.
@@ -25,3 +25,8 @@ export const PROJECT_TYPE_LABEL: Record<ProjectType, string> = {
   browser_agent: "Browser agent",
   cli: "CLI",
 };
+
+/** Badges for a submission: the products its code uses, plus the one the demo ran on. */
+export function badgeProducts(s: Pick<Submission, "productsUsed" | "demoProduct">): Product[] {
+  return PRODUCTS.filter((p) => s.productsUsed.includes(p) || s.demoProduct === p);
+}
