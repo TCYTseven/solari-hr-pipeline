@@ -21,6 +21,8 @@ module.exports = {
       },
       borderRadius: { card: "10px", btn: "6px", badge: "4px" },
       maxWidth: { content: "1200px" },
+      // getsolari.com breaks at 810px and 1200px; the dashboard uses the same.
+      screens: { md: "810px", lg: "1200px" },
     },
   },
 };
