@@ -5,10 +5,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: screener
-      POSTGRES_PASSWORD: screener
+      # `npm run setup` writes a random POSTGRES_PASSWORD to .env; Compose reads it from there.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-screener}
       POSTGRES_DB: solari_screener
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Loopback only: nothing else on the network (or a submission on it) can reach it.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Applied on first start; `npm run db:migrate` re-applies it any time.

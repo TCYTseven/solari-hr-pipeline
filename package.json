@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "setup": "docker compose up -d --wait && npm run db:migrate",
+    "setup": "node --import tsx scripts/setup.mts",
     "scan": "tsx --env-file-if-exists=.env pipeline/cli.ts scan",
     "scan:watch": "tsx --env-file-if-exists=.env pipeline/cli.ts watch",
     "solari:check": "tsx --env-file-if-exists=.env pipeline/solari-check.ts",
