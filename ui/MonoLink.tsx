@@ -2,8 +2,12 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 import { cx } from "./cx";
 
-export const monoLinkClass =
-  "font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink underline decoration-1 underline-offset-4 transition-colors duration-150 hover:text-accent-soft";
+const monoBase = "font-mono text-xs font-semibold uppercase tracking-[0.04em] transition-colors duration-150";
+
+export const monoLinkClass = `${monoBase} text-ink underline decoration-1 underline-offset-4 hover:text-accent-soft`;
+
+/** Same type, muted and without the underline (back links). */
+export const monoQuietLinkClass = `${monoBase} text-ink-muted hover:text-ink`;
 
 /** JetBrains Mono 12px uppercase link, like "EXPLORE BROWSERS" on getsolari.com. */
 export function MonoLink({ className, ...props }: ComponentProps<typeof Link>) {

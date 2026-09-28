@@ -4,7 +4,7 @@ import { ScoreBar } from "@/ui/ScoreBar";
 
 export function ScorePanel({ score }: { score: Score | null }) {
   return (
-    <section aria-labelledby="score-title" className="rounded-card border border-line bg-surface p-5">
+    <section aria-labelledby="score-title" className="rounded-card border border-line bg-surface p-4">
       <div className="flex items-baseline justify-between">
         <Label id="score-title" className="text-ink-muted">
           Score

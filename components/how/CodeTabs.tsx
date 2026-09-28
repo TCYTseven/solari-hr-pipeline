@@ -24,12 +24,11 @@ export function CodeTabs({ samples }: { samples: CodeSample[] }) {
           value={tab}
           onChange={setTab}
           idPrefix="code"
-          size="sm"
         />
         <span className="hidden pb-2 font-mono text-xs text-ink-muted sm:block">{active.file}</span>
       </div>
       <div role="tabpanel" id={`code-panel-${active.value}`} aria-labelledby={`code-tab-${active.value}`}>
-        <LogBlock text={active.code} mode="code" label={`${active.label} code sample`} className="rounded-none border-0" />
+        <LogBlock text={active.code} mode="code" label={`${active.label} code sample`} variant="bare" />
       </div>
     </div>
   );

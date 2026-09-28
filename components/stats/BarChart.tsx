@@ -56,7 +56,7 @@ export function BarChart({
             const hot = r.key === highlight;
             return (
               <div key={r.key} className="grid grid-cols-[104px_1fr] items-center gap-4 md:grid-cols-[120px_1fr]">
-                <span className="truncate font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">{r.label}</span>
+                <span className="truncate font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">{r.label}</span>
                 <div className="relative h-7">
                   {/* tick rules */}
                   {ticks.slice(1).map((t) => (

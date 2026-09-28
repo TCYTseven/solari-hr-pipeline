@@ -16,7 +16,8 @@ const TYPES: Record<string, string> = {
 };
 
 function mediaRoot(): string {
-  return path.resolve(process.env.MEDIA_DIR || ".screener/media");
+  // Runtime-only folder written by the pipeline; nothing here belongs in the build trace.
+  return path.resolve(/*turbopackIgnore: true*/ process.env.MEDIA_DIR || ".screener/media");
 }
 
 export async function GET(req: Request, ctx: RouteContext<"/media/[...path]">) {

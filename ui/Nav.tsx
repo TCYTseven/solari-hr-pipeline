@@ -61,7 +61,7 @@ export function Nav() {
             <Link
               href="/optout"
               aria-current={pathname.startsWith("/optout") ? "page" : undefined}
-              className={buttonClass("ghost", "px-3 py-2 text-[13px]")}
+              className={buttonClass("ghost", undefined, "sm")}
             >
               Opt out
             </Link>

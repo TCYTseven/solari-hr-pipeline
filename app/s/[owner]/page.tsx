@@ -13,7 +13,7 @@ import { Container } from "@/ui/Container";
 import { Divider } from "@/ui/Divider";
 import { Label } from "@/ui/Label";
 import { LiveRefresh } from "@/ui/LiveRefresh";
-import { MonoAnchor, monoLinkClass } from "@/ui/MonoLink";
+import { MonoAnchor, monoLinkClass, monoQuietLinkClass } from "@/ui/MonoLink";
 import { ProductBadge } from "@/ui/ProductBadge";
 import { RelativeTime } from "@/ui/RelativeTime";
 import { StackIcons } from "@/ui/StackIcons";
@@ -40,7 +40,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
   return (
     <Container className="pb-24 pt-10 md:pt-12">
       <LiveRefresh owner={s.owner} />
-      <Link href="/" className={cx(monoLinkClass, "text-ink-muted no-underline hover:text-ink")}>
+      <Link href="/" className={monoQuietLinkClass}>
         ← All submissions
       </Link>
 
@@ -50,7 +50,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
             {s.owner} <span className="text-ink-muted">/</span> {s.title}
           </h1>
           {s.description && <p className="mt-3 max-w-[70ch] text-base text-ink-muted">{s.description}</p>}
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
             <StatusPill status={s.status} />
             {s.commitSha && (
               <span>
@@ -85,10 +85,10 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
         <DemoPlayer submission={s} run={run} startLive={sp.live === "1"} />
         <div className="flex flex-col gap-4">
           <ScorePanel score={s.score} />
-          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 rounded-card border border-line p-5 text-sm">
-            <dt className="font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">Type</dt>
+          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 rounded-card border border-line p-4 text-sm">
+            <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">Type</dt>
             <dd className="text-ink-body">{PROJECT_TYPE_LABEL[s.projectType]}</dd>
-            <dt className="font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">Stack</dt>
+            <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">Stack</dt>
             <dd>
               {s.stack.length ? (
                 <div className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
                 <span className="text-ink-muted">-</span>
               )}
             </dd>
-            <dt className="font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">Products</dt>
+            <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">Products</dt>
             <dd className="flex flex-wrap gap-1.5">
               {s.productsUsed.length ? (
                 PRODUCTS.filter((p) => s.productsUsed.includes(p)).map((p) => (
@@ -109,7 +109,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
                 <span className="text-ink-muted">-</span>
               )}
             </dd>
-            <dt className="font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">VMs</dt>
+            <dt className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">VMs</dt>
             <dd className="font-mono text-ink-body tabular-nums">{run?.vmCount ?? 0}</dd>
           </dl>
         </div>
@@ -122,7 +122,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
           AI summary
         </Label>
         {paragraphs.length ? (
-          <div className="mt-4 flex max-w-[72ch] flex-col gap-4 text-base leading-relaxed text-ink-body">
+          <div className="mt-4 flex max-w-[72ch] flex-col gap-4 text-base leading-normal text-ink-body">
             {paragraphs.map((p, i) => (
               <p key={i}>{p}</p>
             ))}

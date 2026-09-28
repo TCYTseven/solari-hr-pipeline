@@ -58,7 +58,8 @@ function Media({ s, hovering }: { s: Submission; hovering: boolean }) {
         lines={s.errorTail.slice(-4)}
         tone={s.status === "build_failed" ? "fail" : "default"}
         label={`Last lines of the ${s.status === "build_failed" ? "error" : "run"} log`}
-        className="aspect-video rounded-btn !p-3 !text-[11.5px]"
+        variant="card"
+        className="aspect-video"
       />
     );
   }
@@ -83,10 +84,11 @@ export function SubmissionCard({ s, top, selected = false }: { s: Submission; to
       onPointerEnter={onEnter}
       onPointerLeave={() => setHovering(false)}
       className={cx(
-        "group relative flex flex-col rounded-card border border-line bg-surface p-4 transition-colors duration-150",
-        "hover:border-line-strong hover:bg-teal-800",
+        "group relative flex flex-col rounded-card border p-4 transition-colors duration-150",
         "has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-accent",
-        selected && "border-accent bg-teal-800",
+        selected
+          ? "border-accent bg-teal-800"
+          : "border-line bg-surface hover:border-line-strong hover:bg-teal-800",
       )}
     >
       <div className="flex items-center justify-between">

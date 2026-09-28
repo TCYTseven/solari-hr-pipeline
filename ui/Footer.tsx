@@ -13,7 +13,7 @@ export function Footer({ lastScanAt }: { lastScanAt: string | null }) {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <MonoAnchor href={repoUrl}>GitHub</MonoAnchor>
           {xUrl && <MonoAnchor href={xUrl}>X</MonoAnchor>}
-          <span className="font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">
+          <span className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
             <RelativeTime iso={lastScanAt} prefix="Last scan: " />
           </span>
         </div>

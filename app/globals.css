@@ -46,38 +46,47 @@
   color-scheme: dark;
 }
 
-html {
-  background: var(--bg);
-}
-
-body {
-  background: var(--bg);
-  color: var(--text-body);
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
-}
-
-@media (min-width: 810px) {
-  body {
-    font-size: 15px;
+/* Element defaults live in the base layer so Tailwind utilities override them. */
+@layer base {
+  html {
+    background: var(--bg);
   }
-}
 
-::selection {
-  background: rgba(245, 179, 1, 0.35);
-  color: var(--text);
-}
+  body {
+    background: var(--bg);
+    color: var(--text-body);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
+  }
 
-/* Visible focus ring: 2px accent outline, 2px offset. */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  @media (min-width: 810px) {
+    body {
+      font-size: 15px;
+    }
+  }
+
+  ::selection {
+    background: rgba(245, 179, 1, 0.35);
+    color: var(--text);
+  }
+
+  /* Visible focus ring: 2px accent outline, 2px offset. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Numbers, labels and logs in JetBrains Mono sit at 0 tracking unless a
+     utility says otherwise (labels use tracking-[0.04em]). */
+  .font-mono {
+    letter-spacing: 0;
+  }
 }
 
 /* Motion (docs/steps.md, Section 5). Quiet by design. */
@@ -95,6 +104,16 @@ body {
 }
 .fade-in {
   animation: fade-in 200ms ease-out both;
+}
+
+/* Count-up numbers wait for JS (see ui/CountUp.tsx). If hydration never
+   happens, they reveal themselves after 2s. Without JS, .js is never set. */
+@keyframes count-reveal {
+  to { visibility: visible; }
+}
+.js .count-pending {
+  visibility: hidden;
+  animation: count-reveal 0s 2s forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

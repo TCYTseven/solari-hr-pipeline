@@ -18,7 +18,7 @@ export function Hero({ overview, scanning }: { overview: Overview; scanning: boo
       <h1 className="mt-4 max-w-[18ch] font-display text-4xl font-medium leading-[1.1] tracking-[-0.04em] text-ink md:text-[56px]">
         Every Solari submission, booted and demoed.
       </h1>
-      <p className="mt-5 max-w-[60ch] text-base leading-relaxed text-ink-muted">
+      <p className="mt-5 max-w-[60ch] text-base leading-normal text-ink-muted">
         Each fork of the Solari repo is cloned into a Solari Sandbox, opened in a Solari Browser or Desktop, and
         demoed by an AI agent. Updated every 30 minutes.
       </p>

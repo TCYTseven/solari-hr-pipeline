@@ -102,6 +102,7 @@ export function LogBlock({
   label,
   maxHeight,
   mode = "log",
+  variant = "block",
 }: {
   text?: string;
   lines?: string[];
@@ -112,21 +113,34 @@ export function LogBlock({
   maxHeight?: number;
   /** "code" skips the log heuristics (error/warning lines) and only highlights syntax. */
   mode?: "log" | "code";
+  /**
+   * block: standalone panel. card: compact and wrapped, for a card thumbnail.
+   * bare: no frame, when a parent already draws one.
+   */
+  variant?: "block" | "card" | "bare";
 }) {
   const all = lines ?? (text ?? "").replace(/\n$/, "").split("\n");
   return (
     <pre
-      aria-label={label}
-      tabIndex={0}
+      // Scrollable logs are focusable so keyboard users can scroll them.
+      role={label && variant !== "card" ? "region" : undefined}
+      aria-label={variant !== "card" ? label : undefined}
+      tabIndex={variant === "card" ? undefined : 0}
       className={cx(
-        "overflow-auto rounded-card border border-teal-700 bg-teal-900 p-4 font-mono text-[13px] font-normal leading-[1.6] tracking-normal",
+        "bg-teal-900 font-mono font-normal leading-[1.6] tracking-normal [font-variant-ligatures:none]",
+        variant === "block" && "overflow-auto rounded-card border border-teal-700 p-4 text-[13px]",
+        variant === "bare" && "overflow-auto p-4 text-[13px]",
+        variant === "card" && "overflow-hidden rounded-btn border border-teal-700 p-3 text-[11.5px]",
         className,
       )}
       style={{ color: tone === "fail" ? "var(--fail)" : "var(--syn-plain)", maxHeight }}
     >
       <code>
         {all.map((line, i) => (
-          <span key={i} className="block min-h-[1.6em] whitespace-pre">
+          <span
+            key={i}
+            className={cx("block min-h-[1.6em]", variant === "card" ? "whitespace-pre-wrap break-all" : "whitespace-pre")}
+          >
             {tone === "fail" ? line : <Line line={line} code={mode === "code"} />}
           </span>
         ))}

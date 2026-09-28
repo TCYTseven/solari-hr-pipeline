@@ -5,7 +5,7 @@ export function ScoreBar({ label, value, max = 5 }: { label: string; value: numb
     <div className="grid grid-cols-[96px_1fr_20px] items-center gap-3">
       <span className="text-[13px] text-ink-body">{label}</span>
       <div
-        className="h-1.5 rounded-[2px] bg-surface"
+        className="h-1.5 rounded-[2px] bg-white/[0.07]"
         role="meter"
         aria-label={label}
         aria-valuemin={0}

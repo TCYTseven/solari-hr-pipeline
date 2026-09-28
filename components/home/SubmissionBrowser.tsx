@@ -76,7 +76,7 @@ export function SubmissionBrowser({
               className="h-9 w-full rounded-btn border border-line bg-surface px-3 text-sm text-ink placeholder:font-mono placeholder:text-[13px] placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
           </label>
-          <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.04em] text-ink-muted">
+          <label className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
             Sort:
             <span className="relative">
               <select

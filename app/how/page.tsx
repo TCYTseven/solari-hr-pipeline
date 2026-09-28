@@ -136,9 +136,9 @@ export default function HowPage() {
 
       {/* Diagram */}
       <figure className="mt-14" aria-label="Pipeline diagram">
-        <ol className="grid gap-3 md:grid-cols-5 md:gap-0">
+        <ol className="grid grid-cols-1 gap-3 lg:grid-cols-5 lg:gap-0">
           {STEPS.map((s, i) => (
-            <li key={s.n} className="relative flex md:pr-6">
+            <li key={s.n} className="relative flex lg:pr-6">
               <div className="flex w-full flex-col justify-between gap-6 rounded-card border border-line bg-surface p-4">
                 <p className="font-mono text-xs font-semibold uppercase tracking-[0.04em] text-ink-muted">
                   Step {s.n}
@@ -151,7 +151,7 @@ export default function HowPage() {
               {i < STEPS.length - 1 && (
                 <span
                   aria-hidden
-                  className="absolute right-0 top-1/2 hidden h-px w-6 md:block"
+                  className="absolute right-0 top-1/2 hidden h-px w-6 lg:block"
                   style={{ background: "linear-gradient(90deg, rgba(245,179,1,0.2), rgba(245,179,1,0.9))" }}
                 />
               )}
@@ -172,7 +172,7 @@ export default function HowPage() {
               <span className="font-mono text-sm text-accent tabular-nums">{s.n}</span>
               <div>
                 <h2 className="font-display text-xl font-medium leading-[1.2] tracking-[-0.01em] text-ink">{s.title}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{s.body}</p>
+                <p className="mt-2 max-w-[65ch] text-sm leading-normal text-ink-muted">{s.body}</p>
               </div>
             </li>
           ))}

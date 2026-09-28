@@ -20,7 +20,8 @@ module.exports = {
         mono: ["var(--font-mono)"],
       },
       borderRadius: { card: "10px", btn: "6px", badge: "4px" },
-      maxWidth: { content: "1200px" },
+      // 1200px of content plus the 32px gutters on each side.
+      maxWidth: { content: "1264px" },
       // getsolari.com breaks at 810px and 1200px; the dashboard uses the same.
       screens: { md: "810px", lg: "1200px" },
     },
