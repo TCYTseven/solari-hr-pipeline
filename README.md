@@ -2,6 +2,10 @@
 
 Every fork of the Solari cookbook, booted and demoed.
 
+![Walkthrough: the submission grid and its filters, one submission's demo timeline and agent steps, the review page, stats and how it works](devpost/demo.gif)
+
+<sub>A 47-second walkthrough on the built-in sample data. [Watch the MP4](devpost/demo.mp4) or see [the screenshots](devpost/screenshots).</sub>
+
 Candidates fork [`solari-sdk/solari-cookbook`](https://github.com/solari-sdk/solari-cookbook) and build something on Solari. The screener finds each fork, works out what the candidate built, installs and boots it in a Solari Sandbox, has a Claude agent demo it in a Solari Browser or Desktop while recording, and scores it. A dashboard styled after getsolari.com shows every submission, live while a scan runs.
 
 ## What's in here
@@ -114,6 +118,10 @@ Submissions are untrusted code, so:
 - **Prompt injection.** Repository content and web pages go to Claude inside tagged blocks marked as untrusted data, never as instructions.
 - **Docker fallback.** Each run gets its own container and network, all Linux capabilities dropped except the five installs need, no-new-privileges and a process limit. The demo browser can't reach localhost or private addresses other than the app itself. Postgres listens on localhost only, with a random password. Containers still have outbound internet (installs need it) and can reach host services that listen on every interface, so a Solari Sandbox is the stronger boundary: prefer a Solari key when screening strangers' code.
 - **Opt-outs.** Checked before and during every run. Anyone can opt any username out; if someone misuses the form, `npm run db:restore -- <login>` undoes it.
+
+## Demo media
+
+`node devpost/record-demo.mjs [url]` records the walkthrough above from a running dashboard, with a drawn cursor and captions, and encodes `devpost/demo.mp4` and `devpost/demo.gif` (needs ffmpeg). `node devpost/capture.mjs [url]` retakes the screenshots. Both default to `http://localhost:3000`; run the dashboard with `SCREENER_DATA=mock` to use the sample data. [`devpost/README.md`](devpost/README.md) has the rest of the Devpost kit.
 
 ## Deploying
 
