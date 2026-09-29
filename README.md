@@ -2,7 +2,11 @@
 
 Every fork of the Solari cookbook, booted and demoed.
 
-<video src="demo.mp4" width="320" height="240" controls></video>
+<video src="https://github.com/TCYTseven/solari-hr-pipeline/raw/main/demo.mp4" width="100%" controls muted></video>
+
+[![Walkthrough: the submission grid and its filters, one submission's demo timeline and agent steps, the review page, stats and how it works](devpost/demo.gif)](demo.mp4)
+
+<sub>A 47-second walkthrough on the built-in sample data. [Open the MP4](demo.mp4) or see [the screenshots](devpost/screenshots).</sub>
 
 Candidates fork [`solari-sdk/solari-cookbook`](https://github.com/solari-sdk/solari-cookbook) and build something on Solari. The screener finds each fork, works out what the candidate built, installs and boots it in a Solari Sandbox, has a Claude agent demo it in a Solari Browser or Desktop while recording, and scores it. A dashboard styled after getsolari.com shows every submission, live while a scan runs.
 
