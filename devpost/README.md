@@ -12,7 +12,7 @@ Submission fields, gallery, story and demo video plan for the Devpost entry. The
 | About the project | Paste [`story.md`](story.md) as is. Devpost renders the Markdown. |
 | Built with | `typescript`, `node.js`, `next.js`, `react`, `tailwindcss`, `postgresql`, `claude`, `anthropic`, `claude-code`, `solari`, `playwright`, `docker`, `github-api`, `server-sent-events`, `zod` |
 | Try it out | https://github.com/TCYTseven/solari-hr-pipeline |
-| Video demo | Your YouTube or Vimeo link (script below) |
+| Video demo | Your YouTube or Vimeo link. [`demo.mp4`](demo.mp4) is a 47-second captioned walkthrough to upload as is, or to cut into the full video below. |
 
 Other taglines, if the pitch field wants a different angle:
 
@@ -100,4 +100,6 @@ SCREENER_DATA=mock npm run start          # or drop SCREENER_DATA to use your da
 node devpost/capture.mjs                  # writes devpost/screenshots/
 ```
 
-`capture.mjs` takes the dashboard URL as its first argument (default `http://localhost:3000`). With real data, set `DETAIL=<owner>` to a booted web app and `FAILED=<owner>` to a failed build. The cover, architecture and mobile images come from `templates/*.html`, which use the dashboard's colors and bundled copies of Inter and JetBrains Mono (both OFL).
+`capture.mjs` takes the dashboard URL as its first argument (default `http://localhost:3000`). With real data, set `DETAIL=<owner>` to a booted web app and `FAILED=<owner>` to a failed build. `record-demo.mjs` takes the same URL argument and records `demo.mp4` (1440x900 H.264, fits X's and Devpost's limits) and `demo.gif` (for the README). It needs ffmpeg with libx264 on `PATH`, or `FFMPEG=/path/to/ffmpeg`; `pip install imageio-ffmpeg` ships one.
+
+The cover, architecture and mobile images come from `templates/*.html`, which use the dashboard's colors and bundled copies of Inter and JetBrains Mono (both OFL).
