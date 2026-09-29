@@ -2,8 +2,6 @@
 
 Every fork of the Solari cookbook, booted and demoed.
 
-<video src="https://github.com/TCYTseven/solari-hr-pipeline/raw/main/demo.mp4" width="100%" controls muted></video>
-
 [![Walkthrough: the submission grid and its filters, one submission's demo timeline and agent steps, the review page, stats and how it works](devpost/demo.gif)](demo.mp4)
 
 <sub>A 47-second walkthrough on the built-in sample data. [Open the MP4](demo.mp4) or see [the screenshots](devpost/screenshots).</sub>
